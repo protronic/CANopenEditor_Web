@@ -6,7 +6,7 @@
   "license": "GPL-3.0-only",
   "author": {
     "name": "CANopen Editor Team",
-    "email": "canopen-editor@example.com"
+    "email": "info@canopen-editor.org"
   },
   "main": "electron/main.js",
   "scripts": {
