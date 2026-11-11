@@ -49,6 +49,30 @@ npm run electron:build && npm run electron:start
 
 ## Packaging for Distribution
 
+### Requirements
+
+For **Linux .deb packages**, electron-builder requires a maintainer to be specified. This can be configured in two ways:
+
+1. **In package.json** (recommended):
+   ```json
+   "author": {
+     "name": "Your Name or Team Name",
+     "email": "your-email@domain.com"
+   }
+   ```
+   or as a simple string:
+   ```json
+   "author": "Your Name <your-email@domain.com>"
+   ```
+
+2. **In electron-builder.yml** (Linux section):
+   ```yaml
+   linux:
+     maintainer: "Your Name <your-email@domain.com>"
+   ```
+
+> ⚠️ **Note:** Without this configuration, the build will fail with the error: `Please specify author 'email' in the application package.json`.
+
 ### Windows
 
 ```bash
