@@ -36,12 +36,17 @@
                   "maximumError": "2mb"
                 }
               ],
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "baseHref": "./"
             },
             "development": {
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "electron": {
+              "outputHashing": "all",
+              "baseHref": "./"
             }
           },
           "defaultConfiguration": "production"

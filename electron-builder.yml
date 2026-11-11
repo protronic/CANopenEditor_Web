@@ -1,0 +1,48 @@
+appId: com.canopen.editor
+productName: CANopen Editor
+artifactName: canopen-editor-${version}-${os}-${arch}.${ext}
+
+files:
+  - dist/canopen-editor-web/browser/**/*
+  - electron/**/*
+  - package.json
+
+directories:
+  buildResources: assets
+  output: release
+
+win:
+  target: [nsis, zip]
+  icon: assets/icons/icon.png
+
+linux:
+  target: [AppImage, deb, rpm, tar.gz]
+  icon: assets/icons/icon.png
+  category: Development
+  synopsis: CANopen Object Dictionary Editor
+  description: Edit CANopen XDD files
+
+mac:
+  target: [dmg, zip]
+  icon: assets/icons/icon.png
+  category: public.app-category.developer-tools
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: assets/icons/icon.ico
+  uninstallerIcon: assets/icons/icon.ico
+  installerHeaderIcon: assets/icons/icon.ico
+  createStartMenuShortcut: true
+  shortcutName: CANopen Editor
+
+appImage:
+  artifactName: canopen-editor-${version}-linux-x64.${ext}
+
+deb:
+  artifactName: canopen-editor-${version}-linux-${arch}.${ext}
+
+rpm:
+  artifactName: canopen-editor-${version}-linux-${arch}.${ext}
+
+compression: normal
