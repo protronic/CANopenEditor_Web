@@ -55,7 +55,7 @@ npm run electron:build && npm run electron:start
 npm run electron:package:win
 ```
 
-This creates an installer in the `release/` directory.
+This creates an NSIS installer and zip file in the `release/` directory.
 
 ### Linux
 
@@ -80,6 +80,20 @@ To build packages for all platforms:
 ```bash
 npm run electron:package
 ```
+
+### Development Mode
+
+Run the Angular development server with Electron hot-reload:
+
+```bash
+npm run electron:dev
+```
+
+This command:
+1. Starts the Angular development server on `http://localhost:4200`
+2. Waits for the server to be ready
+3. Launches Electron with the development configuration
+4. Opens DevTools automatically
 
 ## Project Structure
 

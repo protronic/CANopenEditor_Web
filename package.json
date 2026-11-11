@@ -12,10 +12,10 @@
     "electron:dev": "concurrently \"npm run start\" \"wait-on http://localhost:4200 && electron .\"",
     "electron:build": "npm run build:electron",
     "electron:start": "electron .",
-    "electron:package": "npm run build:electron && electron-builder build --dir",
-    "electron:package:win": "npm run build:electron && electron-builder build --win --x64 --dir",
-    "electron:package:linux": "npm run build:electron && electron-builder build --linux --x64 --dir",
-    "electron:package:mac": "npm run build:electron && electron-builder build --mac --x64 --dir",
+    "electron:package": "npm run build:electron && electron-builder build",
+    "electron:package:win": "npm run build:electron && electron-builder build --win --x64",
+    "electron:package:linux": "npm run build:electron && electron-builder build --linux --x64",
+    "electron:package:mac": "npm run build:electron && electron-builder build --mac --x64",
     "test": "vitest run"
   },
   "dependencies": {
