@@ -13,7 +13,7 @@ directories:
 
 win:
   target: [nsis, zip]
-  icon: assets/icons/icon.png
+  icon: assets/icons/icon.ico
 
 linux:
   target: [AppImage, deb, rpm, tar.gz]
