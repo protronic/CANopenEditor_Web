@@ -1,5 +1,5 @@
 appId: com.canopen.editor
-productName: CANopen Editor
+productName: CANopen Editor Web
 artifactName: canopen-editor-${version}-${os}-${arch}.${ext}
 
 files:
@@ -21,7 +21,7 @@ linux:
   category: Development
   synopsis: CANopen Object Dictionary Editor
   description: Edit CANopen XDD files
-  maintainer: "CANopen Editor Team <info@canopen-editor.org>"
+  maintainer: "Your Name <your-email@domain.com>"
 
 mac:
   target: [dmg, zip]
@@ -35,7 +35,7 @@ nsis:
   uninstallerIcon: assets/icons/icon.ico
   installerHeaderIcon: assets/icons/icon.ico
   createStartMenuShortcut: true
-  shortcutName: CANopen Editor
+  shortcutName: CANopen Editor Web
 
 appImage:
   artifactName: canopen-editor-${version}-linux-x64.${ext}
