@@ -4,6 +4,10 @@
   "private": true,
   "description": "Angular-Webapp zum Lesen und Schreiben von CANopen-XDD-Dateien.",
   "license": "GPL-3.0-only",
+  "author": {
+    "name": "CANopen Editor Team",
+    "email": "canopen-editor@example.com"
+  },
   "main": "electron/main.js",
   "scripts": {
     "start": "ng serve --host 0.0.0.0 --port 4200",

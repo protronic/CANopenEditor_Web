@@ -21,6 +21,7 @@ linux:
   category: Development
   synopsis: CANopen Object Dictionary Editor
   description: Edit CANopen XDD files
+  maintainer: "CANopen Editor Team <canopen-editor@example.com>"
 
 mac:
   target: [dmg, zip]
