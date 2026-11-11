@@ -1,4 +1,4 @@
-# Electron Integration for CANopen Editor
+# Electron Integration for CANopen Editor Web
 
 This document describes how to build and run the CANopen Editor as a desktop application using Electron.
 
@@ -87,7 +87,15 @@ This creates an NSIS installer and zip file in the `release/` directory.
 npm run electron:package:linux
 ```
 
-This creates AppImage, deb, rpm, and tar.gz packages in the `release/` directory.
+This creates all Linux packages (AppImage, deb, rpm, tar.gz) in the `release/` directory.
+
+**Single package targets:**
+```bash
+npm run electron:package:linux:appimage   # Only AppImage
+npm run electron:package:linux:deb        # Only .deb package
+npm run electron:package:linux:rpm        # Only .rpm package
+npm run electron:package:linux:tar.gz     # Only tar.gz archive
+```
 
 ### macOS
 
@@ -96,6 +104,26 @@ npm run electron:package:mac
 ```
 
 This creates a dmg and zip file in the `release/` directory.
+
+**Single package targets:**
+```bash
+npm run electron:package:mac:dmg    # Only DMG installer
+npm run electron:package:mac:zip    # Only ZIP archive
+```
+
+### Windows
+
+```bash
+npm run electron:package:win
+```
+
+This creates an NSIS installer and zip file in the `release/` directory.
+
+**Single package targets:**
+```bash
+npm run electron:package:win:nsis   # Only NSIS installer
+npm run electron:package:win:zip    # Only ZIP archive
+```
 
 ### All Platforms
 
@@ -246,7 +274,3 @@ To update Electron and electron-builder:
 ```bash
 npm update electron electron-builder wait-on concurrently
 ```
-
-## License
-
-This Electron integration is part of the CANopen Editor project and inherits its GPL-3.0-only license.
