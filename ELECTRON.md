@@ -147,6 +147,44 @@ This command:
 3. Launches Electron with the development configuration
 4. Opens DevTools automatically
 
+## EDSSharp Converter (Import/Export)
+
+The app uses the **EDSSharp** command-line converter for the File → Import (DCF/EDS/XDC) and File → Export (DCF/EDS/JSON/XDC/C source) menu entries. The converter binary must be present per platform:
+
+```
+bin/
+  linux/
+    EDSSharp        # Linux binary (executable)
+  win/
+    EDSSharp.exe    # Windows binary
+```
+
+### Development mode
+
+In development (`npm run electron:dev` / `npm run electron:start`), the binary is loaded directly from the repository:
+
+- Linux: `bin/linux/EDSSharp`
+- Windows: `bin/win/EDSSharp.exe`
+
+Make sure the Linux binary is executable: `chmod +x bin/linux/EDSSharp`.
+
+### Packaged apps
+
+The platform-matching binary is bundled automatically — `electron-builder.yml` includes only `bin/win/**/*` in Windows packages and only `bin/linux/**/*` in Linux packages (both via `files` and `asarUnpack`, since an `.exe` cannot be executed from inside an asar archive). At runtime it is unpacked to `resources/app.asar.unpacked/bin/...`, which `getConverterPath()` in `electron/main.js` resolves automatically. No manual installation is needed on the target machine.
+
+> ⚠️ **Windows note:** Run the packaged app from a **local drive** (e.g. `C:\`), not from a mapped network drive. Chromium passes `icudtl.dat` to its child processes via a file handle, which fails over SMB — the app then shows `Invalid file descriptor to ICU data received`, opens an empty window and quits. Also make sure antivirus software has not quarantined `icudtl.dat`, and unblock the files after copying (`Unblock-File` in PowerShell) if they came from the network.
+
+### Updating the converter
+
+To ship a newer EDSSharp version, replace the binary in `bin/linux/EDSSharp` / `bin/win/EDSSharp.exe` (build it from the EDSSharp_CLI sources) and rebuild the package:
+
+```bash
+npm run electron:package:win:portable   # Windows single .exe
+npm run electron:package:linux          # Linux packages
+```
+
+The app checks converter availability at startup (`check-converter-available` IPC); if the binary is missing for the current platform, Import/Export show an error dialog instead of running.
+
 ## Project Structure
 
 ```

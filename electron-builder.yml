@@ -6,7 +6,6 @@ files:
   - dist/canopen-editor-web/browser/**/*
   - electron/**/*
   - package.json
-  - bin/**/*
   - electron/file-browser.html
 
 directories:
@@ -14,8 +13,12 @@ directories:
   output: release
 
 win:
-  target: [nsis, zip]
+  target: [nsis, zip, portable]
   icon: assets/icons/icon.ico
+  files:
+    - bin/win/**/*
+  asarUnpack:
+    - bin/win/**/*
 
 linux:
   target: [AppImage, deb, rpm, tar.gz]
@@ -24,6 +27,10 @@ linux:
   synopsis: CANopen Object Dictionary Editor
   description: Edit CANopen XDD files
   maintainer: "Your Name <your-email@domain.com>"
+  files:
+    - bin/linux/**/*
+  asarUnpack:
+    - bin/linux/**/*
 
 mac:
   target: [dmg, zip]

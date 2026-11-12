@@ -7,20 +7,23 @@ let mainWindow;
 
 function getConverterPath() {
   const platform = process.platform;
-  let appDir;
-  
-  if (app.isPackaged) {
-    appDir = process.resourcesPath;
-  } else {
-    appDir = path.join(__dirname, '..');
-  }
-  
+  let rel;
   if (platform === 'win32') {
-    return path.join(appDir, 'bin', 'win', 'EDSSharp.exe');
+    rel = path.join('bin', 'win', 'EDSSharp.exe');
   } else if (platform === 'linux') {
-    return path.join(appDir, 'bin', 'linux', 'EDSSharp');
+    rel = path.join('bin', 'linux', 'EDSSharp');
+  } else {
+    return null;
   }
-  return null;
+
+  const appDir = app.isPackaged ? process.resourcesPath : path.join(__dirname, '..');
+
+  // Packaged: unpacked files (asarUnpack) live in app.asar.unpacked next to app.asar
+  const candidates = [
+    path.join(appDir, rel),
+    path.join(appDir, 'app.asar.unpacked', rel)
+  ];
+  return candidates.find((p) => fs.existsSync(p)) || candidates[0];
 }
 
 function createWindow() {
