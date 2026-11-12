@@ -6,6 +6,8 @@ files:
   - dist/canopen-editor-web/browser/**/*
   - electron/**/*
   - package.json
+  - bin/**/*
+  - electron/file-browser.html
 
 directories:
   buildResources: assets

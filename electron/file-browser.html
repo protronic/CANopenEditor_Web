@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Open File</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; font-size: 13px; height: 100vh; display: flex; flex-direction: column; background: #f5f5f5; }
+    .toolbar { padding: 8px; background: #e0e0e0; border-bottom: 1px solid #ccc; display: flex; gap: 8px; align-items: center; }
+    .toolbar button { padding: 4px 12px; cursor: pointer; }
+    .toolbar .nav-btn { width: 36px; height: 32px; padding: 0; font-size: 20px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; border: 1px solid #aaa; border-radius: 4px; background: #fafafa; }
+    .toolbar .nav-btn:hover { background: #d0e8ff; border-color: #4a90d9; }
+    .toolbar input { flex: 1; padding: 4px 8px; }
+    .file-list { flex: 1; overflow-y: auto; padding: 4px; }
+    .file-item { padding: 4px 8px; cursor: pointer; display: flex; gap: 8px; align-items: center; border-radius: 3px; }
+    .file-item:hover { background: #d0e8ff; }
+    .file-item.selected { background: #b0d8ff; }
+    .file-item.directory { font-weight: bold; }
+    .file-item .icon { width: 16px; }
+    .col-size { width: 80px; text-align: right; color: #666; font-size: 12px; }
+    .col-type { width: 80px; color: #666; font-size: 12px; }
+    .col-time { width: 140px; color: #666; font-size: 12px; }
+    .footer { display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #e8e8e8; border-top: 1px solid #ccc; }
+    .status { font-size: 12px; color: #666; }
+    .actions { display: flex; gap: 8px; }
+    .actions button { padding: 6px 20px; cursor: pointer; border: 1px solid #aaa; border-radius: 4px; }
+    .btn-open { background: #4a90d9; color: white; border-color: #3a7bc8; }
+    .btn-open:disabled { background: #ccc; cursor: not-allowed; }
+    .btn-cancel { background: #f0f0f0; }
+    .btn-cancel:hover { background: #e0e0e0; }
+
+    /* Context menu */
+    .context-menu { position: fixed; background: white; border: 1px solid #ccc; border-radius: 4px; box-shadow: 2px 2px 8px rgba(0,0,0,0.15); padding: 4px 0; min-width: 220px; z-index: 1000; display: none; }
+    .context-menu.visible { display: block; }
+    .context-menu-item { padding: 6px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+    .context-menu-item:hover { background: #e8f0fe; }
+    .context-menu-item .checkmark { width: 16px; text-align: center; }
+    .context-menu-separator { height: 1px; background: #ddd; margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button id="btn-up" class="nav-btn" title="Parent directory">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        <path d="M12 17V10"/>
+        <path d="m8.5 13.5 3.5-3.5 3.5 3.5"/>
+      </svg>
+    </button>
+    <button id="btn-home" class="nav-btn" title="Home">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        <path d="m9 15 3-3 3 3"/>
+        <path d="M10 15v3h4v-3"/>
+      </svg>
+    </button>
+    <input id="path-input" type="text" readonly>
+  </div>
+  <div class="file-list" id="file-list"></div>
+  <div class="filename-row" id="filename-row" style="display:none; padding: 8px; background: #e8e8e8; border-top: 1px solid #ccc;">
+    <label style="margin-right: 8px;">Filename:</label>
+    <input id="filename-input" type="text" style="flex: 1; padding: 4px 8px;">
+  </div>
+  <div class="footer">
+    <div class="status" id="status">Loading...</div>
+    <div class="actions">
+      <button id="btn-cancel" class="btn-cancel">Cancel</button>
+      <button id="btn-open" class="btn-open" disabled>Open</button>
+    </div>
+  </div>
+
+  <!-- Context menu -->
+  <div class="context-menu" id="context-menu">
+    <div class="context-menu-item" data-action="open-in-file-manager">
+      <span>Open in File Manager</span>
+    </div>
+    <div class="context-menu-item" data-action="copy-location">
+      <span>Copy Location</span>
+    </div>
+    <div class="context-menu-item" data-action="add-bookmark">
+      <span>Add to Bookmarks</span>
+    </div>
+    <div class="context-menu-separator"></div>
+    <div class="context-menu-item" data-action="toggle-hidden">
+      <span>Show Hidden Files</span>
+      <span class="checkmark" id="check-hidden"></span>
+    </div>
+    <div class="context-menu-item" data-action="toggle-size">
+      <span>Show Size Column</span>
+      <span class="checkmark" id="check-size">✓</span>
+    </div>
+    <div class="context-menu-item" data-action="toggle-type">
+      <span>Show Type Column</span>
+      <span class="checkmark" id="check-type">✓</span>
+    </div>
+    <div class="context-menu-item" data-action="toggle-time">
+      <span>Show Time Column</span>
+      <span class="checkmark" id="check-time"></span>
+    </div>
+    <div class="context-menu-item" data-action="toggle-dirs-first">
+      <span>Directories First</span>
+      <span class="checkmark" id="check-dirs-first">✓</span>
+    </div>
+  </div>
+
+  <script>
+    const { ipcRenderer, clipboard } = require('electron');
+    const path = require('path');
+
+    let currentPath = '';
+    let selectedFile = null;
+    let filterExtensions = [];
+    let showHidden = false;
+    let showSize = true;
+    let showType = true;
+    let showTime = false;
+    let dirsFirst = true;
+    let bookmarks = [];
+    let mode = 'open'; // 'open' or 'save'
+    let defaultFilename = '';
+
+    const fileList = document.getElementById('file-list');
+    const pathInput = document.getElementById('path-input');
+    const status = document.getElementById('status');
+    const btnOpen = document.getElementById('btn-open');
+    const btnCancel = document.getElementById('btn-cancel');
+    const contextMenu = document.getElementById('context-menu');
+    const filenameRow = document.getElementById('filename-row');
+    const filenameInput = document.getElementById('filename-input');
+
+    // Init from main process
+    ipcRenderer.on('init', (event, data) => {
+      currentPath = data.currentPath;
+      filterExtensions = data.extensions || [];
+      mode = data.mode || 'open';
+      defaultFilename = data.defaultFilename || '';
+      
+      if (mode === 'save') {
+        filenameRow.style.display = 'flex';
+        filenameInput.value = defaultFilename;
+        btnOpen.textContent = 'Save';
+        btnOpen.disabled = !defaultFilename;
+        filenameInput.addEventListener('input', () => {
+          btnOpen.disabled = !filenameInput.value.trim();
+        });
+        // Save button active as soon as filename is entered, regardless of file selection
+        filenameInput.focus();
+      }
+      
+      loadDirectory(currentPath);
+    });
+
+    document.getElementById('btn-up').addEventListener('click', () => {
+      if (currentPath) {
+        loadDirectory(path.dirname(currentPath));
+      }
+    });
+
+    document.getElementById('btn-home').addEventListener('click', async () => {
+      const home = await ipcRenderer.invoke('get-home-directory');
+      loadDirectory(home);
+    });
+
+    btnCancel.addEventListener('click', () => {
+      ipcRenderer.send('file-cancelled');
+    });
+
+    // Context menu handling
+    document.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showContextMenu(e.clientX, e.clientY);
+    });
+
+    document.addEventListener('click', () => {
+      hideContextMenu();
+    });
+
+    function showContextMenu(x, y) {
+      contextMenu.style.left = x + 'px';
+      contextMenu.style.top = y + 'px';
+      contextMenu.classList.add('visible');
+      updateCheckmarks();
+    }
+
+    function hideContextMenu() {
+      contextMenu.classList.remove('visible');
+    }
+
+    function updateCheckmarks() {
+      document.getElementById('check-hidden').textContent = showHidden ? '✓' : '';
+      document.getElementById('check-size').textContent = showSize ? '✓' : '';
+      document.getElementById('check-type').textContent = showType ? '✓' : '';
+      document.getElementById('check-time').textContent = showTime ? '✓' : '';
+      document.getElementById('check-dirs-first').textContent = dirsFirst ? '✓' : '';
+    }
+
+    // Context menu actions
+    contextMenu.querySelectorAll('.context-menu-item').forEach(item => {
+      item.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const action = item.dataset.action;
+        hideContextMenu();
+
+        switch (action) {
+          case 'open-in-file-manager':
+            await ipcRenderer.invoke('open-in-file-manager', currentPath);
+            break;
+          case 'copy-location':
+            clipboard.writeText(currentPath);
+            status.textContent = 'Copied: ' + currentPath;
+            break;
+          case 'add-bookmark':
+            if (!bookmarks.includes(currentPath)) {
+              bookmarks.push(currentPath);
+              status.textContent = 'Bookmark added: ' + currentPath;
+            }
+            break;
+          case 'toggle-hidden':
+            showHidden = !showHidden;
+            loadDirectory(currentPath);
+            break;
+          case 'toggle-size':
+            showSize = !showSize;
+            loadDirectory(currentPath);
+            break;
+          case 'toggle-type':
+            showType = !showType;
+            loadDirectory(currentPath);
+            break;
+          case 'toggle-time':
+            showTime = !showTime;
+            loadDirectory(currentPath);
+            break;
+          case 'toggle-dirs-first':
+            dirsFirst = !dirsFirst;
+            loadDirectory(currentPath);
+            break;
+        }
+      });
+    });
+
+    async function loadDirectory(dirPath) {
+      status.textContent = 'Loading ' + dirPath + '...';
+      try {
+        const entries = await ipcRenderer.invoke('list-directory', dirPath, showHidden);
+        currentPath = dirPath;
+        pathInput.value = dirPath;
+        renderEntries(entries);
+        status.textContent = entries.length + ' entries';
+      } catch (err) {
+        status.textContent = 'Error: ' + err.message;
+      }
+    }
+
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+    }
+
+    function renderEntries(entries) {
+      fileList.innerHTML = '';
+      selectedFile = null;
+      // In save mode, button is active if filename is entered; in open mode, only when file selected
+      btnOpen.disabled = mode === 'save' ? !filenameInput.value.trim() : true;
+
+      // Filter by extension if set
+      let filtered = entries.filter(e => {
+        if (e.isDirectory) return true;
+        if (filterExtensions.length === 0) return true;
+        return filterExtensions.some(ext => e.name.toLowerCase().endsWith('.' + ext));
+      });
+
+      // Sort
+      filtered.sort((a, b) => {
+        if (dirsFirst && a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      for (const entry of filtered) {
+        const item = document.createElement('div');
+        item.className = 'file-item' + (entry.isDirectory ? ' directory' : '');
+
+        const icon = document.createElement('span');
+        icon.className = 'icon';
+        icon.textContent = entry.isDirectory ? '📁' : '📄';
+        item.appendChild(icon);
+
+        const name = document.createElement('span');
+        name.textContent = entry.name;
+        name.style.flex = '1';
+        item.appendChild(name);
+
+        if (showSize && !entry.isDirectory && entry.size != null) {
+          const size = document.createElement('span');
+          size.className = 'col-size';
+          size.textContent = formatSize(entry.size);
+          item.appendChild(size);
+        }
+
+        if (showType) {
+          const type = document.createElement('span');
+          type.className = 'col-type';
+          type.textContent = entry.isDirectory ? 'Folder' : (entry.name.split('.').pop() || '').toUpperCase();
+          item.appendChild(type);
+        }
+
+        if (showTime && entry.mtime) {
+          const time = document.createElement('span');
+          time.className = 'col-time';
+          time.textContent = new Date(entry.mtime).toLocaleString();
+          item.appendChild(time);
+        }
+
+        // Double-click to enter/select
+        item.addEventListener('dblclick', () => {
+          if (entry.isDirectory) {
+            loadDirectory(path.join(currentPath, entry.name));
+          } else {
+            selectAndClose(path.join(currentPath, entry.name));
+          }
+        });
+
+        // Single click to select
+        item.addEventListener('click', () => {
+          document.querySelectorAll('.file-item').forEach(el => el.classList.remove('selected'));
+          item.classList.add('selected');
+          if (!entry.isDirectory) {
+            selectedFile = path.join(currentPath, entry.name);
+            btnOpen.disabled = false;
+            status.textContent = 'Selected: ' + entry.name;
+            // In save mode, copy filename to filename input
+            if (mode === 'save') {
+              filenameInput.value = entry.name;
+            }
+          } else {
+            selectedFile = null;
+            // In save mode, keep button active based on filename input
+            btnOpen.disabled = mode === 'save' ? !filenameInput.value.trim() : true;
+          }
+        });
+
+        item.tabIndex = 0;
+        fileList.appendChild(item);
+      }
+    }
+
+    function selectAndClose(filePath) {
+      if (mode === 'save') {
+        const filename = filenameInput.value.trim();
+        if (filename) {
+          const fullPath = path.join(path.dirname(filePath), filename);
+          ipcRenderer.send('file-selected', fullPath);
+        }
+      } else {
+        ipcRenderer.send('file-selected', filePath);
+      }
+    }
+
+    // In save mode, Open button uses filename input
+    btnOpen.addEventListener('click', () => {
+      if (mode === 'save') {
+        const filename = filenameInput.value.trim();
+        if (filename) {
+          ipcRenderer.send('file-selected', path.join(currentPath, filename));
+        }
+      } else if (selectedFile) {
+        selectAndClose(selectedFile);
+      }
+    });
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && selectedFile) {
+        selectAndClose(selectedFile);
+      }
+      if (e.key === 'Escape') {
+        ipcRenderer.send('file-cancelled');
+      }
+    });
+  </script>
+</body>
+</html>

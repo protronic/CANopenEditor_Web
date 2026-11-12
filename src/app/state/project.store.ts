@@ -11,6 +11,8 @@ import { syncMonitoredNodes, trackHeartbeatConsumers } from '../xdd/heartbeat';
 export interface OpenDevice {
   id: string;
   fileName: string;
+  /** Full path if the file was opened from disk or saved; null for new/imported devices */
+  filePath: string | null;
   dirty: boolean;
   document: DeviceDocument;
   /** Counts changes to the document, so views recompute derived data only after a change. */
@@ -57,15 +59,15 @@ export class ProjectStore {
         return;
       }
     }
-    this.add(this.create(document, 'project.xdd', true));
+    this.add(this.create(document, 'project.xdd', true, null));
   }
 
-  openXml(fileName: string, xml: string): void {
+  openXml(fileName: string, xml: string, filePath: string | null = null): void {
     try {
       const document = parseXdd(xml);
       const safeName = ensureXddName(fileName, document.productName);
       document.fileName = safeName;
-      this.add(this.create(document, safeName, false));
+      this.add(this.create(document, safeName, false, filePath));
     } catch (error) {
       void this.dialogs.error(error instanceof Error ? error.message : 'The XDD file could not be read.');
     }
@@ -128,9 +130,9 @@ export class ProjectStore {
     return { fileName: name, xml: writeXdd(device.document, now) };
   }
 
-  markSaved(id: string, fileName: string): void {
+  markSaved(id: string, fileName: string, filePath: string | null = null): void {
     this.devices.update((list) => list.map((device) => (
-      device.id === id ? { ...device, dirty: false, fileName, revision: device.revision + 1 } : device
+      device.id === id ? { ...device, dirty: false, fileName, filePath, revision: device.revision + 1 } : device
     )));
   }
 
@@ -139,12 +141,13 @@ export class ProjectStore {
     this.selectedId.set(device.id);
   }
 
-  private create(document: DeviceDocument, fileName: string, dirty: boolean): OpenDevice {
+  private create(document: DeviceDocument, fileName: string, dirty: boolean, filePath: string | null = null): OpenDevice {
     countPdos(document);
     trackHeartbeatConsumers(document);
     return {
       id: globalThis.crypto.randomUUID(),
       fileName,
+      filePath,
       dirty,
       document,
       revision: 0,

@@ -638,9 +638,18 @@ app-pdo-view {
   font-size: 0.82rem;
 }
 
-.info-line.info-action { grid-template-columns: 11.2rem minmax(0, 1fr) auto; }
+.info-line.info-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
 
-.info-action label { color: var(--ink); font-size: inherit; }
+.info-action label { color: var(--ink); font-size: inherit; flex: 1 1 8rem; }
+
+.info-action input { flex: 1 1 4.5rem; min-width: 0; width: auto; }
+
+.info-action button { flex: 0 0 auto; }
 
 .info-line input {
   width: 100%;

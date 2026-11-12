@@ -1,4 +1,4 @@
-# CANopenEditor_WebApp
+# CANopenEditor_Web
 
 Angular-based user interface for the CANopen object dictionary. It is a reimplementation of the desktop
 application CANopenEditor (https://github.com/CANopenNode/CANopenEditor).
