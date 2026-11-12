@@ -491,7 +491,7 @@ export function bitLength(dataType: DataTypeName): number {
 
 export function ensureXddName(fileName: string, productName: string): string {
   const source = fileName.trim() || productName.trim() || 'project';
-  const baseName = source.replace(/^.*[\\/]/, '').replace(/\.xdd$/i, '') || 'project';
+  const baseName = source.replace(/^.*[\\/]/, '').replace(/\.(xdd|xml|eds|dcf|xdc|xpd)$/i, '') || 'project';
   const safe = baseName.replace(/[^\w.\- ()[\]]+/g, '_') || 'project';
   return `${safe}.xdd`;
 }

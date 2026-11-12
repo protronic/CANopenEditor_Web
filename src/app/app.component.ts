@@ -1,4 +1,4 @@
-import { Component, computed, signal, OnInit, OnDestroy, effect } from '@angular/core';
+import { Component, computed, signal, OnInit, OnDestroy, effect, HostListener } from '@angular/core';
 import { DeviceInfoComponent } from './device-info.component';
 import { DialogHostComponent } from './dialog-host.component';
 import { InsertProfileComponent } from './insert-profile.component';
@@ -92,7 +92,8 @@ type SaveFilePickerWindow = Window & {
             <section class="empty">
               <h2>Object Dictionary Editor</h2>
               <p>Edit device information, the object dictionary, and PDO mapping.</p>
-              <p>Only the <strong>XDD</strong> file format is read and written.</p>
+              <p>Only the <strong>XDD</strong> file format is natively read and written.</p>
+              <p class="hint">Tip: Drag &amp; drop an XDD, XPD, EDS, DCF or XDC file onto the window to import it.</p>
               <div class="actions">
                 <button type="button" (click)="store.newDevice()">New</button>
                 <button type="button" (click)="openFile()">Open</button>
@@ -106,6 +107,9 @@ type SaveFilePickerWindow = Window & {
         <app-insert-profile (closed)="profileOpen.set(false)" (inserted)="setTab('od')" />
       }
       <app-dialog-host />
+      @if (dragActive()) {
+        <div class="drop-overlay"><div class="drop-hint">Drop XDD / XPD / EDS / DCF / XDC to import</div></div>
+      }
     </div>
   `,
 })
@@ -116,6 +120,7 @@ export class AppComponent implements OnInit, OnDestroy {
     return (id && this.tabs()[id]) || 'info';
   });
   readonly profileOpen = signal(false);
+  readonly dragActive = signal(false);
 
   private subscriptions = new Subscription();
 
@@ -199,8 +204,8 @@ export class AppComponent implements OnInit, OnDestroy {
     try {
       const content = await (window as any).electronAPI.readFile(filePath);
       const fileName = filePath.split('/').pop() || 'converted.xdd';
-      // Imported file has no original file path - Save will show dialog
-      this.store.openXml(fileName, content, null);
+      // Imported from a non-XDD format: no file on disk, Save shows a dialog and Close always asks
+      this.store.openImported(fileName, content);
     } catch (error) {
       console.error('Error loading converted file:', error);
       void this.dialogs.error('The converted file could not be loaded.');
@@ -353,6 +358,93 @@ export class AppComponent implements OnInit, OnDestroy {
     }
     this.store.close(device.id);
     this.tabs.update(({ [device.id]: _, ...rest }) => rest);
+  }
+
+  @HostListener('window:dragover', ['$event'])
+  onDragOver(event: DragEvent): void {
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy';
+    }
+    this.dragActive.set(true);
+  }
+
+  @HostListener('window:dragleave', ['$event'])
+  onDragLeave(event: DragEvent): void {
+    if (!event.relatedTarget) {
+      this.dragActive.set(false);
+    }
+  }
+
+  @HostListener('window:drop', ['$event'])
+  onDrop(event: DragEvent): void {
+    event.preventDefault();
+    this.dragActive.set(false);
+    void this.onDropFiles(event);
+  }
+
+  private async onDropFiles(event: DragEvent): Promise<void> {
+    const files = Array.from(event.dataTransfer?.files ?? []);
+    for (const file of files) {
+      await this.importDroppedFile(file);
+    }
+  }
+
+  private async importDroppedFile(file: File): Promise<void> {
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const electronAPI = (window as any).electronAPI;
+
+    if (ext === 'xdd' || ext === 'xml') {
+      const content = await file.text();
+      let filePath: string | null = null;
+      if (this.converter.isElectron && electronAPI?.getPathForFile) {
+        try {
+          filePath = await electronAPI.getPathForFile(file);
+        } catch {
+          filePath = null;
+        }
+      }
+      // Dropped from disk: keep path so Save writes back directly
+      this.store.openXml(file.name, content, filePath);
+      return;
+    }
+
+    if (ext === 'xpd') {
+      // XPD is handled internally like XDD (path kept), but starts dirty so Close always asks
+      const content = await file.text();
+      let filePath: string | null = null;
+      if (this.converter.isElectron && electronAPI?.getPathForFile) {
+        try {
+          filePath = await electronAPI.getPathForFile(file);
+        } catch {
+          filePath = null;
+        }
+      }
+      this.store.openImported(file.name, content, filePath);
+      return;
+    }
+
+    if (ext === 'eds' || ext === 'dcf' || ext === 'xdc') {
+      if (!this.converter.isElectron || !electronAPI?.importDroppedFile) {
+        void this.dialogs.error('EDS/DCF/XDC import is only available in the desktop app.');
+        return;
+      }
+      try {
+        const filePath = await electronAPI.getPathForFile(file);
+        if (!filePath) {
+          throw new Error('The file path could not be determined.');
+        }
+        const result = await electronAPI.importDroppedFile({ filePath, format: ext });
+        // Imported from a non-XDD format: no file on disk, Save shows a dialog and Close always asks
+        this.store.openImported(file.name, result.content);
+      } catch (error: any) {
+        console.error('Import failed:', error);
+        void this.dialogs.error(`"${file.name}" could not be imported: ${error?.message || String(error)}`);
+      }
+      return;
+    }
+
+    void this.dialogs.error(`"${file.name}" is not a supported file (XDD, XPD, EDS, DCF, XDC).`);
   }
 
   async loadExample(): Promise<void> {

@@ -83,6 +83,27 @@ label {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(74, 144, 217, 0.12);
+  border: 3px dashed #4a90d9;
+  pointer-events: none;
+}
+
+.drop-hint {
+  padding: 1rem 2rem;
+  background: #fff;
+  border-radius: 8px;
+  font-weight: bold;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
 }
 
 .top, .main-head, .pdo-head, .detail-head, .mapping-head, .od-toolbar {

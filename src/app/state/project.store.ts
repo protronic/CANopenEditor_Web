@@ -63,11 +63,23 @@ export class ProjectStore {
   }
 
   openXml(fileName: string, xml: string, filePath: string | null = null): void {
+    this.open(fileName, xml, filePath, false);
+  }
+
+  /**
+   * Opens a file imported from a non-XDD format. The device starts dirty,
+   * so closing it always asks about the unsaved changes.
+   */
+  openImported(fileName: string, xml: string, filePath: string | null = null): void {
+    this.open(fileName, xml, filePath, true);
+  }
+
+  private open(fileName: string, xml: string, filePath: string | null, dirty: boolean): void {
     try {
       const document = parseXdd(xml);
       const safeName = ensureXddName(fileName, document.productName);
       document.fileName = safeName;
-      this.add(this.create(document, safeName, false, filePath));
+      this.add(this.create(document, safeName, dirty, filePath));
     } catch (error) {
       void this.dialogs.error(error instanceof Error ? error.message : 'The XDD file could not be read.');
     }

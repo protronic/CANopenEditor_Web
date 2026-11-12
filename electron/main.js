@@ -95,50 +95,58 @@ function createMenu() {
         },
         { type: 'separator' },
         {
-          label: 'Import',
+          label: 'Import from',
           submenu: [
             {
-              label: 'Import from DCF...',
+              label: 'DCF...',
               click: () => showImportDialog('dcf'),
               enabled: process.platform !== 'darwin'
             },
             {
-              label: 'Import from EDS...',
+              label: 'EDS...',
               click: () => showImportDialog('eds'),
               enabled: process.platform !== 'darwin'
             },
             {
-              label: 'Import from XDC...',
+              label: 'XDC...',
               click: () => showImportDialog('xdc'),
               enabled: process.platform !== 'darwin'
+            },
+            {
+              label: 'XPD...',
+              click: () => showImportDialog('xpd')
             }
           ]
         },
         {
-          label: 'Export',
+          label: 'Export to',
           submenu: [
             {
-              label: 'Export to DCF...',
+              label: 'DCF...',
               click: () => showExportDialog('dcf'),
               enabled: process.platform !== 'darwin'
             },
             {
-              label: 'Export to EDS...',
+              label: 'EDS...',
               click: () => showExportDialog('eds'),
               enabled: process.platform !== 'darwin'
             },
             {
-              label: 'Export to JSON...',
+              label: 'JSON...',
               click: () => showExportDialog('json'),
               enabled: process.platform !== 'darwin'
             },
             {
-              label: 'Export to XDC...',
+              label: 'XDC...',
               click: () => showExportDialog('xdc'),
               enabled: process.platform !== 'darwin'
             },
             {
-              label: 'Export to C Source...',
+              label: 'XPD...',
+              click: () => showExportDialog('xpd')
+            },
+            {
+              label: 'C Source...',
               click: () => showExportDialog('c'),
               enabled: process.platform !== 'darwin'
             }
@@ -203,6 +211,19 @@ function createMenu() {
 
 async function showImportDialog(format) {
   if (!mainWindow) return;
+
+  // XPD is XML and parsed directly by the app - no EDSSharp conversion needed
+  if (format === 'xpd') {
+    const xpdPath = await showCustomFileBrowser({
+      title: 'Import from XPD file',
+      extensions: ['xpd'],
+      startPath: app.getPath('home')
+    });
+    if (!xpdPath) return;
+    mainWindow.webContents.send('load-converted-file', { path: xpdPath });
+    return;
+  }
+
   const filters = getFiltersForFormat(format);
   const extensions = filters.length > 0 && filters[0].extensions ? filters[0].extensions.filter(e => e !== '*') : [];
 
@@ -319,7 +340,35 @@ function showCustomFileBrowser(options) {
 
 async function showExportDialog(format) {
   if (!mainWindow) return;
-  
+
+  // XPD is XML: write the current XDD serialization with .xpd extension - no EDSSharp needed
+  if (format === 'xpd') {
+    const xddContent = await mainWindow.webContents.executeJavaScript('window.getCurrentXddContent?.()');
+    if (!xddContent) {
+      dialog.showMessageBoxSync(mainWindow, { type: 'error', title: 'No file open', message: 'Please open a file first before exporting.' });
+      return;
+    }
+    const xpdPath = await showCustomFileBrowser({
+      title: 'Export to XPD file',
+      extensions: ['xpd'],
+      startPath: app.getPath('home'),
+      mode: 'save',
+      defaultFilename: 'device.xpd'
+    });
+    if (!xpdPath) return;
+    try {
+      fs.writeFileSync(xpdPath, xddContent, 'utf-8');
+      dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Export Successful',
+        message: 'File successfully exported to XPD format.'
+      });
+    } catch (err) {
+      dialog.showMessageBoxSync(mainWindow, { type: 'error', title: 'Export Error', message: String(err.message || err) });
+    }
+    return;
+  }
+
   // Check if a device is open
   const xddContent = await mainWindow.webContents.executeJavaScript('window.getCurrentXddContent?.()');
   if (!xddContent) {
@@ -436,7 +485,8 @@ function getFiltersForFormat(format) {
     dcf: [{ name: 'DCF Files', extensions: ['dcf'] }],
     xdc: [{ name: 'XDC Files', extensions: ['xdc'] }],
     c: [{ name: 'C Source Files', extensions: ['c', 'h'] }],
-    json: [{ name: 'JSON Files', extensions: ['json'] }]
+    json: [{ name: 'JSON Files', extensions: ['json'] }],
+    xpd: [{ name: 'XPD Profile Files', extensions: ['xpd'] }]
   };
   const formatKey = format.toLowerCase();
   const filters = filtersMap[formatKey] || [];
@@ -471,13 +521,56 @@ function getEdsSharpArgs(inputPath, outputPath, format, isImport) {
   return args;
 }
 
+const REPO_URL = 'https://github.com/protronic/CANopenEditor_Web';
+
 function showAboutDialog() {
-  dialog.showMessageBox(mainWindow, {
-    type: 'info',
+  const aboutWindow = new BrowserWindow({
+    width: 480,
+    height: 240,
     title: 'About CANopen Editor',
-    message: 'CANopen Editor Web',
-    detail: `Version: ${app.getVersion()}\n\nAngular-based user interface for the CANopen object dictionary.`
+    parent: mainWindow,
+    modal: true,
+    resizable: false,
+    center: true,
+    autoHideMenuBar: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true
+    }
   });
+  aboutWindow.setMenu(null);
+
+  // Open links in the system browser instead of a new Electron window
+  aboutWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      require('electron').shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: "Segoe UI", "Noto Sans", "Liberation Sans", sans-serif; font-size: 14px; margin: 0; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: #f5f5f5; color: #222; }
+    h1 { font-size: 18px; margin: 0 0 6px; }
+    p { margin: 5px 0; }
+    a { color: #4a90d9; }
+    p:last-of-type { margin-bottom: 0; }
+    button { margin-top: 24px; padding: 6px 28px; font-size: 14px; cursor: pointer; border: 1px solid #aaa; border-radius: 4px; background: #4a90d9; color: #fff; border-color: #3a7bc8; }
+    button:hover { background: #3a7bc8; }
+  </style>
+</head>
+<body>
+  <h1>CANopen Editor Web</h1>
+  <p>Version: ${app.getVersion()}</p>
+  <p>Angular-based user interface for the CANopen object dictionary.</p>
+  <p>Repository: <a href="${REPO_URL}" target="_blank">${REPO_URL}</a></p>
+  <button type="button" onclick="window.close()">Close</button>
+</body>
+</html>`;
+  aboutWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
 }
 
 app.whenReady().then(() => {
@@ -612,6 +705,35 @@ ipcMain.handle('read-file', async (event, filePath) => {
 ipcMain.handle('write-file', async (event, filePath, content) => {
   fs.writeFileSync(filePath, content, 'utf-8');
   return true;
+});
+
+// Import a dropped EDS/DCF/XDC file: convert to a temporary XDD and return its content
+ipcMain.handle('import-dropped-file', async (event, { filePath, format }) => {
+  const converterPath = getConverterPath();
+  if (!converterPath || !fs.existsSync(converterPath)) {
+    throw new Error('EDSSharp converter is not available for this platform');
+  }
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`File not found: ${filePath}`);
+  }
+  const tempDir = path.join(app.getPath('temp'), 'canopen-editor');
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+  }
+  const tempOutputPath = path.join(tempDir, `import_${Date.now()}.xdd`);
+  const args = getEdsSharpArgs(filePath, tempOutputPath, format, true);
+  await new Promise((resolve, reject) => {
+    execFile(converterPath, args, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(stderr.toString() || error.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+  const content = fs.readFileSync(tempOutputPath, 'utf-8');
+  try { fs.unlinkSync(tempOutputPath); } catch (e) {}
+  return { content, fileName: path.basename(filePath) };
 });
 
 // Update menu state based on whether a file is open
