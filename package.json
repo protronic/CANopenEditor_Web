@@ -8,6 +8,10 @@
     "name": "CANopen Editor Web Team",
     "email": "entwicklung@protronic-gmbh.de"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/protronic/CANopenEditor_Web.git"
+  },
   "main": "electron/main.js",
   "scripts": {
     "start": "ng serve --host 0.0.0.0 --port 4200",
