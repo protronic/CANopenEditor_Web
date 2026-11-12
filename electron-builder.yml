@@ -7,6 +7,7 @@ files:
   - electron/**/*
   - package.json
   - electron/file-browser.html
+  - assets/icons/256x256.png
 
 directories:
   buildResources: assets
@@ -19,10 +20,14 @@ win:
     - bin/win/**/*
   asarUnpack:
     - bin/win/**/*
+    - assets/icons/256x256.png
 
 linux:
   target: [AppImage, deb, rpm, tar.gz]
-  icon: assets/icons/icon.png
+  # Icon set directory: files named <size>x<size>.png (32x32 … 512x512).
+  # electron-builder installs them as hicolor icons (deb/rpm) and uses the
+  # largest one for the AppImage .DirIcon / embedded icon.
+  icon: assets/icons
   category: Development
   synopsis: CANopen Object Dictionary Editor
   description: Edit CANopen XDD files
@@ -31,6 +36,7 @@ linux:
     - bin/linux/**/*
   asarUnpack:
     - bin/linux/**/*
+    - assets/icons/256x256.png
 
 mac:
   target: [dmg, zip]

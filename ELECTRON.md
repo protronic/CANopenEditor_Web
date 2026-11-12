@@ -199,9 +199,16 @@ scripts/
   generate-icon.js    # Icon generation script
 
 assets/icons/
-  icon.svg     # Application icon (SVG format)
-  icon.png     # Application icon (PNG format)
+  icon.svg       # Application icon (SVG source)
+  icon.png       # Application icon, 512x512 PNG (win/mac builds)
+  32x32.png      # Linux icon set (electron-builder `linux.icon: assets/icons`)
+  64x64.png      #   installed as hicolor icons in deb/rpm, largest size is
+  128x128.png    #   used for the AppImage .DirIcon
+  256x256.png    #   256x256 is also shipped in the package as window icon
+  512x512.png
 ```
+
+Regenerate the PNGs from the SVG with `node scripts/generate-icon.js` (needs inkscape, rsvg-convert or ImageMagick).
 
 ## Configuration
 

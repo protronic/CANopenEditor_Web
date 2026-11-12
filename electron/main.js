@@ -26,10 +26,23 @@ function getConverterPath() {
   return candidates.find((p) => fs.existsSync(p)) || candidates[0];
 }
 
+function getIconPath() {
+  const rel = path.join('assets', 'icons', '256x256.png');
+  const appDir = app.isPackaged ? process.resourcesPath : path.join(__dirname, '..');
+
+  // Packaged: unpacked files (asarUnpack) live in app.asar.unpacked next to app.asar
+  const candidates = [
+    path.join(appDir, rel),
+    path.join(appDir, 'app.asar.unpacked', rel)
+  ];
+  return candidates.find((p) => fs.existsSync(p)) || candidates[0];
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    icon: getIconPath(),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -317,6 +330,7 @@ async function showExportDialog(format) {
   const filters = getFiltersForFormat(format);
   const extensions = filters.length > 0 && filters[0].extensions ? filters[0].extensions.filter(e => e !== '*') : [];
   const defaultExt = extensions[0] || format;
+  const defaultFilename = format === 'c' ? 'OD.c' : 'device.' + defaultExt;
 
   // Use custom HTML file browser in save mode
   const targetPath = await showCustomFileBrowser({
@@ -324,7 +338,7 @@ async function showExportDialog(format) {
     extensions: extensions,
     startPath: app.getPath('home'),
     mode: 'save',
-    defaultFilename: 'device.' + defaultExt
+    defaultFilename: defaultFilename
   });
 
   if (!targetPath) {
