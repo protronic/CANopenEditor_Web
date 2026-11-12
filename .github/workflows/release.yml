@@ -21,15 +21,25 @@ jobs:
       contents: write
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install dependencies
         run: npm install
+
+      - name: Generate application icons (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          npm install --no-save sharp
+          node -e "require('sharp')('assets/icons/icon.svg', { density: 300 }).resize(512, 512).png().toFile('assets/icons/icon.png')"
+          npx --yes png-to-ico assets/icons/icon.png > assets/icons/icon.ico
+          echo "Generated icons:"
+          file assets/icons/icon.png assets/icons/icon.ico || true
 
       - name: Download EDSSharp converter (Linux)
         if: runner.os == 'Linux'
