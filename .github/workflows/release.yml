@@ -1,0 +1,60 @@
+name: Release Electron App
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            builder_args: '--win --x64 --publish always'
+          - os: ubuntu-latest
+            builder_args: '--linux --x64 --publish always'
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Download EDSSharp converter (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p bin/linux
+          curl -L -o /tmp/edssharp.tar.gz https://github.com/protronic/CANopenEditor/releases/latest/download/EDSSharp-linux-x64.tar.gz
+          mkdir -p /tmp/edssharp
+          tar -xzf /tmp/edssharp.tar.gz -C /tmp/edssharp
+          cp "$(find /tmp/edssharp -type f -name EDSSharp | head -n1)" bin/linux/EDSSharp
+          chmod +x bin/linux/EDSSharp
+
+      - name: Download EDSSharp converter (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path bin/win | Out-Null
+          Invoke-WebRequest -Uri https://github.com/protronic/CANopenEditor/releases/latest/download/EDSSharp-win-x64.zip -OutFile $env:TEMP\edssharp.zip
+          Expand-Archive -Path $env:TEMP\edssharp.zip -DestinationPath $env:TEMP\edssharp -Force
+          $exe = Get-ChildItem -Path $env:TEMP\edssharp -Recurse -Filter EDSSharp.exe | Select-Object -First 1
+          Copy-Item $exe.FullName bin/win/EDSSharp.exe
+
+      - name: Build Angular app
+        run: npm run build:electron
+
+      - name: Build and publish Electron packages
+        run: npx electron-builder build ${{ matrix.builder_args }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
