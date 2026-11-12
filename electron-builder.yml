@@ -26,7 +26,7 @@ linux:
   category: Development
   synopsis: CANopen Object Dictionary Editor
   description: Edit CANopen XDD files
-  maintainer: "Your Name <your-email@domain.com>"
+  maintainer: "CANopen Editor Web Team <entwicklung@protronic-gmbh.de>"
   files:
     - bin/linux/**/*
   asarUnpack:
