@@ -1,6 +1,6 @@
 appId: com.canopen.editor
 productName: CANopen Editor Web
-artifactName: can-open-editor-web-${version}-${os}-${arch}.${ext}
+artifactName: canopen-editor-web-${version}-${os}-${arch}.${ext}
 
 files:
   - dist/canopen-editor-web/browser/**/*
@@ -47,12 +47,12 @@ nsis:
   shortcutName: CANopen Editor Web
 
 appImage:
-  artifactName: can-open-editor-web-${version}-linux-x64.${ext}
+  artifactName: canopen-editor-web-${version}-linux-x64.${ext}
 
 deb:
-  artifactName: can-open-editor-web-${version}-linux-${arch}.${ext}
+  artifactName: canopen-editor-web-${version}-linux-${arch}.${ext}
 
 rpm:
-  artifactName: can-open-editor-web-${version}-linux-${arch}.${ext}
+  artifactName: canopen-editor-web-${version}-linux-${arch}.${ext}
 
 compression: normal
