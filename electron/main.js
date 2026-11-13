@@ -142,10 +142,6 @@ function createMenu() {
               enabled: process.platform !== 'darwin'
             },
             {
-              label: 'XPD...',
-              click: () => showExportDialog('xpd')
-            },
-            {
               label: 'C Source...',
               click: () => showExportDialog('c'),
               enabled: process.platform !== 'darwin'
