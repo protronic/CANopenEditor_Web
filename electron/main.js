@@ -509,7 +509,7 @@ function getEdsSharpArgs(inputPath, outputPath, format, isImport) {
     } else if (format == 'c') {
       type = 'CanOpenNodeV4';
     } else if (format == 'json') {
-      type = 'CanOpenNodeProtobuf';
+      type = 'CanOpenNodeProtobuf(json)';
     }
     args = ['--infile', inputPath, '--outfile', outputPath, '--type', type];
   }
