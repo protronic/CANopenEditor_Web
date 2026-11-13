@@ -377,6 +377,9 @@ button.collapse {
 
 .od-line input, .od-line select, .od-line textarea { width: auto; flex: 1; min-width: 0; }
 
+/* Match the height of the PDO mapping inputs (.info-line input). */
+.od-line input, .od-line select { padding: 0.22rem 0.4rem; }
+
 .od-id-row .od-line { flex: 0 1 16rem; }
 
 .od-id-row input { flex: 0 0 6.2rem; }
@@ -438,8 +441,8 @@ button.collapse {
 
 .object-settings .default-line { align-self: end; }
 
-/* Same height as the "Default value" input, which uses the smaller font of the form. */
-.od .save-row button.system { padding-block: 0.275rem; min-width: 7rem; }
+/* Same height as the "Default value" input (0.22rem padding-block + smaller form font). */
+.od .save-row button.system { padding-block: 0.095rem; min-width: 7rem; }
 
 .save-row .od-check { justify-self: start; }
 
