@@ -29,6 +29,7 @@ type SaveFilePickerWindow = Window & {
   imports: [DialogHostComponent, DeviceInfoComponent, InsertProfileComponent, ObjectDictionaryComponent, PdoViewComponent],
   template: `
     <div class="shell">
+      @if (!converter.isElectron) {
       <header class="top">
         <div class="brand">
           <span class="mark">OD</span>
@@ -48,6 +49,7 @@ type SaveFilePickerWindow = Window & {
           <input #picker hidden type="file" accept=".xdd,application/xml" (change)="openFileFromInput($event)" />
         </div>
       </header>
+      }
 
       <div class="workspace">
         <aside>
@@ -127,7 +129,7 @@ export class AppComponent implements OnInit, OnDestroy {
   constructor(
     readonly store: ProjectStore,
     private readonly dialogs: DialogService,
-    private readonly converter: ConverterService
+    readonly converter: ConverterService
   ) {
     this.setupConverterEvents();
     
@@ -178,6 +180,9 @@ export class AppComponent implements OnInit, OnDestroy {
             break;
           case 'saveAs':
             void this.saveAs();
+            break;
+          case 'insertProfile':
+            this.profileOpen.set(true);
             break;
         }
       });

@@ -146,7 +146,7 @@ interface OdViewState {
               <input [ngModel]="draftName" (ngModelChange)="setDraft('name', $event)" [disabled]="!editing()" />
             </label>
             @if (mappingSelected()) {
-              <button type="button" class="system" (click)="resetName()" [disabled]="!canResetName">Reset Name</button>
+              <button type="button" class="system standard-size" (click)="resetName()" [disabled]="!canResetName">Reset Name</button>
             }
           </div>
           <label class="od-line">
@@ -256,7 +256,7 @@ interface OdViewState {
                 <input type="checkbox" [(ngModel)]="autosave" />
                 <span>Auto Apply</span>
               </label>
-              <button type="button" class="system" [class.dirty]="dirty" (click)="saveChanges()" [disabled]="!editing()">Apply</button>
+              <button type="button" class="system standard-size" [class.dirty]="dirty" (click)="saveChanges()" [disabled]="!editing()">Apply</button>
             </div>
           </fieldset>
         </div>

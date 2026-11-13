@@ -1,6 +1,7 @@
 import { Component, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DeviceDocument, hex4 } from './model/device';
+import { DraggableDirective } from './draggable.directive';
 import { DialogService } from './state/dialog.service';
 import { ProjectStore } from './state/project.store';
 import { parseXdd } from './xdd/xdd-codec';
@@ -16,10 +17,10 @@ import {
 @Component({
   selector: 'app-insert-profile',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, DraggableDirective],
   template: `
     <div class="modal-back" (click)="closed.emit()">
-      <div class="modal profile-modal" (click)="$event.stopPropagation()" role="dialog" aria-labelledby="insert-profile-title">
+      <div class="modal profile-modal" appDraggable (click)="$event.stopPropagation()" role="dialog" aria-labelledby="insert-profile-title">
         <h2 id="insert-profile-title">Insert Profile</h2>
         <fieldset>
           <legend>Profiles</legend>

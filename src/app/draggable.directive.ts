@@ -1,8 +1,8 @@
 import { Directive, ElementRef, HostListener, effect, inject, input } from '@angular/core';
 
 /**
- * Lets the host (a modal window) be moved by dragging its title (`h3`). The window stays inside the
- * viewport. Changing the bound value (e.g. the next queued dialog) puts the window back in the middle.
+ * Lets the host (a modal window) be moved by dragging its title (`h2` or `h3`). The window stays inside
+ * the viewport. Changing the bound value (e.g. the next queued dialog) puts the window back in the middle.
  */
 @Directive({
   selector: '[appDraggable]',
@@ -25,7 +25,7 @@ export class DraggableDirective {
 
   @HostListener('pointerdown', ['$event'])
   start(event: PointerEvent): void {
-    const handle = (event.target as HTMLElement).closest('h3');
+    const handle = (event.target as HTMLElement).closest('h2, h3');
     if (event.button !== 0 || !handle || !this.host.nativeElement.contains(handle)) {
       return;
     }

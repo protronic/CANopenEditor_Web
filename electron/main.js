@@ -95,6 +95,13 @@ function createMenu() {
         },
         { type: 'separator' },
         {
+          label: 'Insert Profile',
+          click: () => mainWindow?.webContents.send('menu-action', 'insertProfile'),
+          id: 'menu-insert-profile',
+          enabled: false
+        },
+        { type: 'separator' },
+        {
           label: 'Import from',
           submenu: [
             {
@@ -753,13 +760,14 @@ function updateMenuState() {
   if (saveItem) saveItem.enabled = hasOpenFile;
   if (saveAsItem) saveAsItem.enabled = hasOpenFile;
   
+  const insertProfileItem = fileMenu.submenu.items.find(item => item.id === 'menu-insert-profile');
+  if (insertProfileItem) insertProfileItem.enabled = hasOpenFile;
+  
   // Enable/disable Export submenu items
-  const exportMenu = fileMenu.submenu.items.find(item => item.label === 'Export');
+  const exportMenu = fileMenu.submenu.items.find(item => item.label === 'Export to');
   if (!exportMenu || !exportMenu.submenu) return;
   
   exportMenu.submenu.items.forEach(item => {
-    if (item.label && item.label.startsWith('Export to')) {
-      item.enabled = hasOpenFile;
-    }
+    item.enabled = hasOpenFile && process.platform !== 'darwin';
   });
 }

@@ -34,7 +34,8 @@ button {
   background: var(--accent);
   color: white;
   border-radius: 4px;
-  padding: 0.45rem 0.75rem;
+  padding: 0.28rem 0.6rem;
+  font-size: 0.85rem;
   cursor: pointer;
 }
 
@@ -124,6 +125,11 @@ label {
 
 .tabs { flex-wrap: wrap; }
 
+.main-head .tabs button {
+  padding: 0.28rem 0.6rem;
+  font-size: 0.85rem;
+}
+
 .brand > div { display: flex; flex-direction: column; line-height: 1.15; }
 
 .brand small, .device small, .schema, .hint { color: var(--muted); }
@@ -162,6 +168,7 @@ aside, main {
 aside {
   border-right: 1px solid var(--line);
   background: #ebe6dc;
+  overflow-y: auto;
 }
 
 main { display: flex; flex-direction: column; gap: 0.75rem; min-height: 0; overflow: hidden; }
@@ -177,11 +184,18 @@ h2, h3, h4 { margin: 0 0 0.6rem; }
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 0.6rem;
-  margin-bottom: 0.45rem;
+  padding: 0.4rem;
+  margin-bottom: 0.35rem;
   cursor: pointer;
   box-shadow: var(--shadow);
 }
+
+/* Compact sidebar: smaller "Devices" heading and file entries. */
+aside h2 { font-size: 0.95rem; margin-bottom: 0.3rem; }
+
+.device strong { font-size: 0.85rem; }
+
+.device small { font-size: 0.72rem; }
 
 .device strong, .device small { display: block; }
 
@@ -220,6 +234,13 @@ app-object-dictionary {
   border-radius: 8px;
   padding: 1.25rem;
 }
+
+/* Welcome screen: match the compact app typography. */
+.empty h2 { font-size: 1.15rem; margin-bottom: 0.45rem; }
+.empty p { font-size: 0.9rem; margin: 0.25rem 0; }
+
+/* Space above the New / Open / Open example XDD buttons. */
+.empty .actions { margin-top: 0.75rem; }
 
 .form-grid, .detail-form, .pdo-fields {
   display: grid;
@@ -454,6 +475,12 @@ button.collapse {
   padding: 0.4rem 0.85rem;
 }
 
+/* "Reset Name" uses the standard button size, like the PDO mapping buttons. */
+.od button.system.standard-size {
+  padding: 0.28rem 0.6rem;
+  font-size: 0.85rem;
+}
+
 .od button.system.dirty,
 .pdo-layout button.system.dirty {
   background: tomato;
@@ -512,10 +539,22 @@ button.collapse {
 
 .dialog-box h3 { margin: 0; }
 
-/* Title of a movable window (appDraggable). */
-.modal h3 { cursor: grab; user-select: none; touch-action: none; }
+/* Title of a movable window (appDraggable). The title element is pulled up to the top edge of the
+   window (negative margins + matching padding), so the whole strip down to the title text is the
+   drag handle; the text itself stays in place. */
+.modal h2, .modal h3 {
+  margin-top: -1rem;
+  margin-left: -1rem;
+  margin-right: -1rem;
+  padding: 1rem 1rem 0;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
 
-.modal.dragging h3 { cursor: grabbing; }
+/* While dragging, the closed hand wins everywhere in the window (even over inputs/buttons). */
+.modal.dragging,
+.modal.dragging * { cursor: grabbing !important; }
 
 .dialog-box p { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
 
@@ -776,7 +815,6 @@ app-pdo-view {
   color: var(--ink);
   border: 1px solid #b7b0a4;
   border-radius: 3px;
-  padding: 0.35rem 0.7rem;
 }
 
 .comm-fields .info-line > label.check {

@@ -4,15 +4,16 @@ import { OdEntry, hex4 } from './model/device';
 import { DialogService } from './state/dialog.service';
 import { ProjectStore } from './state/project.store';
 import { CloneRow, buildCloneRows } from './xdd/clone';
+import { DraggableDirective } from './draggable.directive';
 import { parseOffsets } from './xdd/profiles';
 
 @Component({
   selector: 'app-clone-objects',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, DraggableDirective],
   template: `
     <div class="modal-back" (click)="closed.emit()">
-      <div class="modal profile-modal clone-modal" (click)="$event.stopPropagation()" role="dialog" aria-labelledby="clone-title">
+      <div class="modal profile-modal clone-modal" appDraggable (click)="$event.stopPropagation()" role="dialog" aria-labelledby="clone-title">
         <h2 id="clone-title">Insert OD Objects</h2>
         <label>Target
           <select [ngModel]="targetId" (ngModelChange)="setTarget($event)">
