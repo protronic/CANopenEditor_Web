@@ -2,22 +2,23 @@
 
 | | |
 |---|---|
-| **Stand** | Entwurf 2 zur Abstimmung, 26.11.2026 |
+| **Stand** | Entwurf 3, 26.11.2026 |
 | **Betrifft** | `protronic/CANopenEditor_Web` (Oberfläche) und `protronic/CANopenEditor` (libEDSsharp, EDSSharp, C-Generator) |
-| **Noch nichts umgesetzt** | Dieses Dokument ist nur der Plan. Offene Entscheidungen stehen in Abschnitt 10. |
+| **Noch nichts umgesetzt** | Dieses Dokument ist nur der Plan. Die getroffenen Entscheidungen stehen in Abschnitt 10. |
 
-**Geändert gegenüber Entwurf 1:** Die Lösung soll upstream-tauglich bleiben (Projekt CANopenNode). Deshalb gibt es **kein eigenes Dateiformat** mehr. Die Texte liegen im vorhandenen Projektformat (XDD und Protobuf), und der vorhandene JSON-Export liefert sie ohne neuen Exporter mit.
+**Geändert gegenüber Entwurf 2:** Die Entscheidungen vom 26.11. sind eingearbeitet: drei Textarten (16 / 128 / unbegrenzt), Deutsch und Englisch mit Rückfall auf Deutsch, Einheiten und Wertetexte von Anfang an, LVGL 9, Umsetzung zuerst im Fork.
 
 ---
 
 ## 1. Ziel in Kurzform
 
-Zu jedem Objekt im Object Dictionary (OD) sollen Texte gepflegt werden können: kurze und lange Bezeichnungen für die Touch-Oberfläche, Tooltips und Beschreibungen für die Weboberfläche, alles in mehreren Sprachen.
+Zu jedem Objekt im Object Dictionary (OD) sollen Texte gepflegt werden können: eine Bezeichnung für die Touch-Oberfläche, Tooltip und Beschreibung für die Weboberfläche, dazu Einheit und Wertetexte, alles in mehreren Sprachen.
 
 1. Aus einem bestehenden OD entsteht ein **Meta-Projekt** (ein „Meta-Clone“) mit derselben Adressstruktur, im selben Dateiformat wie das OD.
 2. Der Editor bekommt einen **Meta-Editor**, dessen Auswahl mit dem OD gekoppelt ist.
 3. Der C-Export erzeugt für ein Meta-Projekt **`meta.c` / `meta.h`** statt `OD.c` / `OD.h`: ein platzsparendes Sprach-Wörterbuch für C und LVGL.
 4. Der **JSON-Export bleibt der vorhandene** und enthält die Texte automatisch.
+5. Die Lösung bleibt **upstream-tauglich** (Projekt CANopenNode): kein eigenes Dateiformat, nur zusätzliche Angaben im vorhandenen.
 
 ## 2. Begriffe
 
@@ -27,7 +28,8 @@ Zu jedem Objekt im Object Dictionary (OD) sollen Texte gepflegt werden können: 
 | **Meta-Projekt** | Eine normale Projektdatei in diesem Format, die zusätzlich Texte enthält. Entsteht als Kopie des OD. |
 | **Meta-Eintrag** | Die Texte zu einer Adresse (Index + Subindex) im Meta-Projekt. |
 | **Meta-Adresse** | Angabe an einem OD-Objekt, welcher Meta-Eintrag gilt. Standard: die eigene Adresse. |
-| **Textart** | Eine Sorte Text mit eigener Länge, z. B. „Bezeichnung kurz“ oder „Tooltip“. |
+| **Textart** | Eine Sorte Text, z. B. „Bezeichnung“ oder „Tooltip“. |
+| **Wertetext** | Text zu einem bestimmten Wert eines Objekts, z. B. 0 = Aus, 1 = Ein. |
 
 ## 3. Ausgangslage
 
@@ -46,7 +48,7 @@ Zu jedem Objekt im Object Dictionary (OD) sollen Texte gepflegt werden können: 
 4. **Allgemein halten.** Der Generator erzeugt reines C99 ohne Abhängigkeit von LVGL oder von protronic. Die LVGL-Anbindung ist ein Beispiel außerhalb des Generators.
 5. **Englisch** für Code, Kommentare, Bezeichner, Oberflächentexte und die Formatbeschreibung.
 6. **Kleine, getrennte Schritte** mit Tests, die sich einzeln als Pull Request bei Upstream einreichen lassen (Abschnitt 9).
-7. **Früh abstimmen.** Namen der Eigenschaften und Feldnummern vor der Umsetzung bei Upstream als Vorschlag einstellen (Issue), damit sie später nicht umbenannt werden müssen.
+7. **Erst im Fork umsetzen, dann einreichen.** Die Namen der Eigenschaften stehen im Code an genau einer Stelle. Verlangt Upstream beim Einreichen andere Namen, liest der Code danach alte und neue.
 
 ## 5. Konzept
 
@@ -54,8 +56,8 @@ Zu jedem Objekt im Object Dictionary (OD) sollen Texte gepflegt werden können: 
 
 - Aktion **„Create meta project from OD“**: kopiert die gewählten Objekte in eine zweite Projektdatei, z. B. `geraet.xdd` → `geraet_meta.xdd`. Adressen (Index, Subindex) bleiben gleich.
 - Das Meta-Projekt ist eine **gültige XDD**. Jedes Werkzeug, das XDD liest, kann es öffnen; die Struktur (Namen, Typen) stammt aus dem OD und dient als Orientierung.
-- Im Dialog wählbar: Adressbereiche (Vorschlag: ab 0x2000 vorausgewählt, Kommunikationsobjekte optional), Sprachen und die Ausgangssprache.
-- Vorbelegung: Der OD-Name wird zur mittleren Bezeichnung, die OD-Beschreibung zum Tooltip (jeweils in der Ausgangssprache).
+- Im Dialog **vorausgewählt sind die Objekte ab 0x2000**. Kommunikationsobjekte (0x1000–0x1FFF) lassen sich dazunehmen.
+- Vorbelegung: Der OD-Name wird zur Bezeichnung, die OD-Beschreibung zur Beschreibung. Im Dialog gibt man an, in welcher Sprache das OD geschrieben ist.
 - Die Adressen werden **vorerst** 1:1 übernommen. Im C-Code arbeitet die Firmware mit fortlaufenden Meta-IDs (Abschnitt 7). Eine spätere Entkopplung von den OD-Adressen ändert deshalb die Firmware-Schnittstelle nicht.
 - Weil es dasselbe Format ist, könnten die Texte auch direkt in der OD-Datei stehen. Der Clone bleibt trotzdem der vorgesehene Weg: Die Gerätedatei bleibt schlank, und Texte lassen sich von mehreren OD-Objekten gemeinsam nutzen.
 
@@ -73,24 +75,22 @@ Manche Texte passen zu mehreren OD-Objekten, z. B. bei PDOs: Die Kommunikationsp
 
 Beispiel: Am Objekt 0x1401 wird die Meta-Adresse `0x1400` eingetragen. Dann zeigen 0x1401:01, 0x1401:02 … automatisch auf die Meta-Einträge 0x1400:01, 0x1400:02 …
 
-### 5.3 Textarten und Sprachen
+### 5.3 Textarten, Einheiten, Wertetexte und Sprachen
 
-Feste Kennungen, damit alle Werkzeuge dasselbe verstehen. Die Längen sind Richtwerte und je Projekt einstellbar:
+| Textart | Kennung | Länge | Ziel | In `meta.c` |
+|---|---|---|---|---|
+| Bezeichnung | `label` | 16 Zeichen | Touch und Web | alle Einträge |
+| Tooltip | `tooltip` | 128 Zeichen | Web, bei Bedarf Touch | nur ausgewählte Einträge |
+| Beschreibung | `description` | unbegrenzt | Web | nein |
+| Einheit | `unit` | Richtwert 8 Zeichen | Touch und Web | alle Einträge |
+| Wertetext | `value.<Wert>` | 16 Zeichen | Touch und Web | alle Einträge |
 
-| Textart | Ziel | Richtwert Länge | Im C-Export |
-|---|---|---|---|
-| `label_s` Bezeichnung kurz | Touch | 10 Zeichen | ja |
-| `label_m` Bezeichnung mittel | Touch | 20 Zeichen | ja |
-| `label_l` Bezeichnung lang | Touch | 40 Zeichen | ja |
-| `tooltip` | Web, optional Touch | 120 Zeichen | nur ausgewählte Einträge |
-| `description` Beschreibung | Web | ein Absatz | nein |
-| `details` | Web | frei | nein |
-
-- **Sprachen:** Liste je Projekt (z. B. `de`, `en`), eine davon ist die Rückfallsprache.
-- **Fehlt eine Übersetzung**, liefert die Firmware den Text der Rückfallsprache.
-- **Auswahl für den C-Export** auf zwei Ebenen, damit es nicht zu viel wird:
-  - je Textart: `alle` / `nur ausgewählte` / `nicht`,
-  - je Meta-Eintrag ein Häkchen „Tooltip in die Firmware“.
+- Die Längen sind Grenzen für die Warnung im Editor und je Projekt änderbar.
+- **Sprachen zum Start:** Deutsch (`de`) und Englisch (`en`). Weitere lassen sich jederzeit ergänzen.
+- **Rückfallsprache ist Deutsch.** Fehlt eine Übersetzung, liefert die Firmware den deutschen Text.
+- **Einheit** (z. B. `°C`): wird meist nur einmal in der Rückfallsprache eingetragen und gilt dann über den Rückfall für alle Sprachen. Abweichungen je Sprache sind möglich (z. B. `Std.` / `h`).
+- **Wertetexte** für Aufzählungen: je Wert ein Text je Sprache (0 = Aus, 1 = Ein, 2 = Auto). Texte für einzelne Bits sind nicht nötig, weil Bits im OD eigene Adressen haben und damit eigene Bezeichnungen bekommen.
+- **Tooltip in der Firmware:** je Meta-Eintrag ein Häkchen, damit nur die wichtigsten Flash belegen.
 
 ### 5.4 Ablage im vorhandenen Format
 
@@ -100,44 +100,53 @@ Der technische Name und die Beschreibung eines Objekts (`<label lang="en">`, `<d
 |---|---|---|
 | Text je Textart und Sprache | Eigenschaft `CO_text:<Textart>:<Sprache>` am Parameter | `map<string, string> texts`, Schlüssel `<Textart>:<Sprache>` |
 | Meta-Adresse | Eigenschaft `CO_metaRef` | `string metaRef` |
-| Auswahl für den C-Export je Eintrag | Eigenschaft `CO_textExport` (z. B. `tooltip`) | `repeated string textExport` |
-| Projektangaben: Sprachen, Rückfallsprache, Textarten mit Länge, Quelle des Clones | `characteristic` unter `DeviceFunction/capabilities` (dort steht heute schon „SW library“) | Nachricht `textInfo` im Gerät |
+| Tooltip in die Firmware | Eigenschaft `CO_textExport` (Wert `tooltip`) | `repeated string textExport` |
+| Projektangaben: Sprachen, Rückfallsprache, Längen, Quelle des Clones | `characteristic` unter `DeviceFunction/capabilities` (dort steht heute schon „SW library“) | Nachricht `textInfo` im Gerät |
 
-Beispiel XDD (vereinfacht):
+Beispiel XDD (vereinfacht), ein Messwert und ein Objekt mit Wertetexten:
 
 ```xml
-<parameter uniqueID="UID_PARAM_2100" access="readWrite">
-  <label lang="en">Temperature</label>
-  <property name="CO_text:label_s:de" value="Temp." />
-  <property name="CO_text:label_m:de" value="Temperatur" />
-  <property name="CO_text:label_m:en" value="Temperature" />
-  <property name="CO_text:tooltip:de" value="Aktuelle Kesseltemperatur" />
+<parameter uniqueID="UID_PARAM_2100" access="read">
+  <label lang="en">Boiler temperature</label>
+  <property name="CO_text:label:de" value="Kesseltemp." />
+  <property name="CO_text:label:en" value="Boiler temp." />
+  <property name="CO_text:tooltip:de" value="Aktuelle Temperatur im Kessel" />
+  <property name="CO_text:unit:de" value="°C" />
   <property name="CO_textExport" value="tooltip" />
+</parameter>
+
+<parameter uniqueID="UID_PARAM_2200" access="readWrite">
+  <label lang="en">Operating mode</label>
+  <property name="CO_text:label:de" value="Betriebsart" />
+  <property name="CO_text:value.0:de" value="Aus" />
+  <property name="CO_text:value.1:de" value="Ein" />
+  <property name="CO_text:value.2:de" value="Auto" />
 </parameter>
 ```
 
-Dasselbe Objekt im vorhandenen JSON-Export (neu ist nur `texts`):
+Dasselbe im vorhandenen JSON-Export (neu ist nur `texts`):
 
 ```json
 "2100": {
-  "name": "Temperature",
+  "name": "Boiler temperature",
   "objectType": "OBJECT_TYPE_VAR",
   "subObjects": {
     "00": {
       "dataType": "INTEGER16",
       "texts": {
-        "label_s:de": "Temp.",
-        "label_m:de": "Temperatur",
-        "label_m:en": "Temperature",
-        "tooltip:de": "Aktuelle Kesseltemperatur"
-      }
+        "label:de": "Kesseltemp.",
+        "label:en": "Boiler temp.",
+        "tooltip:de": "Aktuelle Temperatur im Kessel",
+        "unit:de": "°C"
+      },
+      "textExport": ["tooltip"]
     }
   }
 }
 ```
 
 - **EDS** kennt keine Sprachen. Beim EDS-Export entfallen die Texte; die EDS bleibt gültig.
-- Die mehrsprachigen Standard-Elemente der XDD (`<label lang="de">`) werden vorerst nicht benutzt, weil das erste `label` der technische Name ist und es dort nur eine Bezeichnung je Sprache gibt. Siehe offene Entscheidung 3.
+- Die mehrsprachigen Standard-Elemente der XDD (`<label lang="de">`) werden nicht benutzt, weil das erste `label` der technische Name ist und es dort nur eine Bezeichnung je Sprache gibt.
 
 ## 6. Oberfläche (Web-Editor)
 
@@ -145,10 +154,15 @@ Dasselbe Objekt im vorhandenen JSON-Export (neu ist nur `texts`):
 
 - Neben *Device Info / Object Dictionary / TX / RX* kommt der Reiter **Meta**. Er zeigt die Texte des zum Gerät gehörenden Meta-Projekts; gibt es noch keines, bietet er „Create meta project from OD“ an.
 - **Links** die Liste der Meta-Einträge, aufgebaut wie im OD (Objekte, darunter Subindizes).
-- **Rechts** die Texte des gewählten Eintrags: je Textart eine Zeile, je Sprache eine Spalte, mit Zeichenzähler und Markierung bei Überlänge.
+- **Rechts** der gewählte Eintrag:
+  - Bezeichnung, Tooltip und Beschreibung: je Textart eine Zeile, je Sprache eine Spalte, mit Zeichenzähler und Markierung bei Überlänge;
+  - Einheit;
+  - Tabelle der Wertetexte (Wert, Deutsch, Englisch) mit Zeilen hinzufügen und löschen;
+  - Häkchen „Tooltip in firmware“.
+- Wertelisten lassen sich **kopieren und auf mehrere markierte Einträge anwenden**, damit „Aus / Ein“ nicht zwanzigmal getippt wird. In `meta.c` werden gleiche Listen ohnehin nur einmal abgelegt.
 - Zusätzlich eine **Tabellenansicht** (alle Einträge × Sprachen für eine Textart) zum zügigen Übersetzen, mit Filter „fehlende Übersetzungen“.
 - Unter den Texten steht **„used by“**: alle OD-Objekte, die auf diesen Eintrag zeigen. Ein Klick springt ins OD.
-- Einstellungen des Meta-Projekts: Sprachen, Rückfallsprache, Textarten mit Länge und C-Export.
+- Einstellungen des Meta-Projekts: Sprachen, Rückfallsprache, Längen.
 
 ### 6.2 Kopplung der Auswahl
 
@@ -190,9 +204,19 @@ EDSSharp --export-project --infile geraet_meta.xdd --outdir ./out
 
 - Das zugehörige OD wird über die im Meta-Projekt gemerkte Quelle gefunden (oder per Option). Der Generator braucht es für die Zuordnung OD-Adresse → Meta-Eintrag (`CO_metaRef`).
 - Fehlt das OD, gilt jede Adresse für sich. Der Exporter funktioniert damit auch allein, was ihn für Upstream einfacher macht.
-- Optionen schränken Sprachen und Textarten zusätzlich ein, ohne das Projekt zu ändern.
+- Optionen schränken die Sprachen zusätzlich ein, ohne das Projekt zu ändern.
 
-### 7.2 Datenstruktur
+### 7.2 Was in die Firmware kommt
+
+| Inhalt | Umfang |
+|---|---|
+| Bezeichnung (16) | alle Einträge, alle Sprachen |
+| Einheit | alle Einträge |
+| Wertetexte | alle Einträge |
+| Tooltip (128) | nur Einträge mit Häkchen |
+| Beschreibung | nie; sie steht nur im JSON für die Weboberfläche |
+
+### 7.3 Datenstruktur
 
 Ziel: wenig Flash, kein RAM, kein Kopieren, schneller Zugriff.
 
@@ -200,11 +224,12 @@ Ziel: wenig Flash, kein RAM, kein Kopieren, schneller Zugriff.
 |---|---|---|
 | **Meta-ID** | fortlaufende Nummer 0 … N−1 je Meta-Eintrag | direkter Tabellenzugriff ohne Suche |
 | **OD-Zuordnung** | sortierte Tabelle (Index, Sub) → Meta-ID, 5 Byte je OD-Adresse | Suche per Halbierung; mehrere OD-Adressen dürfen dieselbe ID haben |
-| **String-Pool** je Sprache | ein zusammenhängender UTF-8-Block, jeder Text nur einmal | gleiche Texte (z. B. kurz = mittel, Einheiten) kosten nur einmal Platz |
+| **String-Pool** je Sprache | ein zusammenhängender UTF-8-Block, jeder Text nur einmal | gleiche Texte (Einheiten, „Aus“, „Ein“) kosten nur einmal Platz |
 | **Offset-Tabelle** je Sprache und Textart | 16-Bit-Offset in den Pool, Position = Meta-ID | 2 statt 4 Byte je Text gegenüber Zeigern |
-| **dünn besetzte Tabelle** | sortierte Paare (Meta-ID, Offset) | für Textarten mit wenigen Einträgen, z. B. Tooltips |
+| **dünn besetzte Tabelle** | sortierte Paare (Meta-ID, Offset) | für Textarten mit wenigen Einträgen: Tooltip, Einheit |
+| **Wertelisten** | je Liste sortierte Werte und je Sprache die Offsets; je Meta-Eintrag die Nummer seiner Liste | gleiche Listen werden zusammengelegt und nur einmal abgelegt |
 
-- Offset 0 bedeutet „kein Text“. Dann greift die Rückfallsprache.
+- Offset 0 bedeutet „kein Text“. Dann greift die Rückfallsprache Deutsch.
 - Der Generator wählt selbst zwischen dichter und dünner Tabelle und wechselt auf 32-Bit-Offsets, falls ein Pool größer als 64 KiB wird.
 - Alles ist `const` und liegt im Flash. RAM-Bedarf: nur die aktuelle Sprache (1 Byte).
 - Weil mit Offsets statt Zeigern gearbeitet wird, ist ein Sprachblock verschiebbar. Sprachen später aus externem Flash nachzuladen bleibt damit möglich.
@@ -214,15 +239,16 @@ Skizze der erzeugten Dateien:
 ```c
 /* meta.h */
 typedef enum { META_LANG_DE, META_LANG_EN, META_LANG_COUNT } meta_lang_t;
-typedef enum { META_TEXT_LABEL_S, META_TEXT_LABEL_M, META_TEXT_TOOLTIP, META_TEXT_COUNT } meta_text_t;
+typedef enum { META_TEXT_LABEL, META_TEXT_TOOLTIP, META_TEXT_UNIT, META_TEXT_COUNT } meta_text_t;
 typedef uint16_t meta_id_t;
 #define META_ID_NONE      0xFFFFu
 #define META_ENTRY_COUNT  187u
 
-#define META_H2100        12u            /* Temperature, Namen wie OD_ENTRY_H2100 */
+#define META_H2100        12u            /* Boiler temperature, Namen wie OD_ENTRY_H2100 */
 
-meta_id_t   meta_find(uint16_t index, uint8_t subIndex);   /* OD-Adresse -> Meta-ID */
-const char *meta_text(meta_id_t id, meta_text_t text);     /* aktuelle Sprache, mit Rückfall */
+meta_id_t   meta_find(uint16_t index, uint8_t subIndex);       /* OD-Adresse -> Meta-ID */
+const char *meta_text(meta_id_t id, meta_text_t text);         /* aktuelle Sprache, mit Rückfall */
+const char *meta_value_text(meta_id_t id, int32_t value);      /* NULL, wenn es zum Wert keinen Text gibt */
 void        meta_set_language(meta_lang_t lang);
 ```
 
@@ -233,36 +259,41 @@ static const uint8_t  od_sub[]   = {      1,      2,      1,      2, /* ... */ }
 static const uint16_t od_id[]    = {      0,      1,      0,      1, /* ... */ };  /* 0x1401 nutzt 0x1400 */
 
 static const char pool_de[] =
-    "\0"                 /*  0: kein Text   */
-    "Temp.\0"            /*  1              */
-    "Temperatur\0";      /*  7              */
+    "\0"                 /*  0: kein Text */
+    "Kesseltemp.\0"      /*  1            */
+    "Aus\0"              /* 13            */
+    "Ein\0";             /* 17            */
 
-static const uint16_t de_label_s[META_ENTRY_COUNT] = { /* ... */ 1, /* ... */ };
-static const uint16_t de_label_m[META_ENTRY_COUNT] = { /* ... */ 7, /* ... */ };
+static const uint16_t de_label[META_ENTRY_COUNT] = { /* ... */ 1, /* ... */ };
+
+/* Werteliste 0 (Aus/Ein), von mehreren Einträgen gemeinsam genutzt */
+static const int32_t  vl0_value[] = {  0,  1 };
+static const uint16_t vl0_de[]    = { 13, 17 };
 ```
 
-Rechenbeispiel (Annahme: 200 Meta-Einträge, 250 OD-Adressen, 3 Bezeichnungslängen, 2 Sprachen): Tabellen 200 × 3 × 2 × 2 Byte = 2,4 kB, OD-Zuordnung 250 × 5 Byte ≈ 1,3 kB, dazu die Texte selbst. Mit Zeigern wären allein die Tabellen 4,8 kB.
+Rechenbeispiel (Annahme: 200 Meta-Einträge, 250 OD-Adressen, 2 Sprachen): Tabelle der Bezeichnungen 200 × 2 × 2 Byte = 0,8 kB, OD-Zuordnung 250 × 5 Byte ≈ 1,3 kB, die Bezeichnungen selbst höchstens 200 × 17 Byte × 2 Sprachen = 6,8 kB. Dazu kommen Einheiten, Wertetexte und die ausgewählten Tooltips.
 
-### 7.3 Verwendung mit LVGL
+### 7.4 Verwendung mit LVGL 9
 
 ```c
-lv_label_set_text_static(label, meta_text(META_H2100, META_TEXT_LABEL_M));
-/* oder aus der OD-Adresse: */
-lv_label_set_text_static(label, meta_text(meta_find(0x2100, 0), META_TEXT_LABEL_S));
+lv_label_set_text_static(label, meta_text(META_H2100, META_TEXT_LABEL));
+lv_label_set_text_static(unit,  meta_text(META_H2100, META_TEXT_UNIT));
+/* aus der OD-Adresse, mit Wertetext: */
+const char *mode = meta_value_text(meta_find(0x2200, 0), value);
 ```
 
 - `lv_label_set_text_static` kopiert nicht. Die Texte bleiben im Flash, es wird kein Heap gebraucht.
-- Nach `meta_set_language()` müssen sichtbare Labels neu gesetzt werden. Dafür ist eine kleine, handgeschriebene Hilfsdatei `meta_lvgl.c` vorgesehen. Sie gehört zum Beispiel bzw. zur Firmware, nicht zum Generator.
+- Nach `meta_set_language()` müssen sichtbare Labels neu gesetzt werden. Dafür ist eine kleine, handgeschriebene Hilfsdatei `meta_lvgl.c` für LVGL 9 vorgesehen: Labels melden sich mit ID und Textart an und aktualisieren sich beim Sprachwechsel selbst. Sie gehört zum Beispiel bzw. zur Firmware, nicht zum Generator.
 - Auf Wunsch (Option) schreibt der Generator zusätzlich **`meta_glyphs.txt`**: alle in den exportierten Texten vorkommenden Zeichen. Damit lassen sich die LVGL-Schriften mit `lv_font_conv` auf die wirklich benötigten Zeichen beschränken. Das spart meist mehr Flash als jede Optimierung an den Texten.
 
-### 7.4 Bewusst nicht im ersten Schritt
+### 7.5 Bewusst nicht im ersten Schritt
 
 - **Kompression** der Texte. Sie bräuchte einen RAM-Puffer und würde `set_text_static` verhindern. Erst sinnvoll, wenn die Messung zeigt, dass der Platz nicht reicht.
 - **Zusammenlegen gemeinsamer Wortenden** (z. B. „Temperatur“ in „Übertemperatur“). Als spätere, rein generatorseitige Optimierung möglich, ohne Änderung an der Firmware.
 
 ## 8. JSON für die Weboberfläche
 
-- Es gibt **keinen neuen JSON-Exporter**. Der vorhandene Export „CanOpenNode Protobuf (json)“ wird auf das Meta-Projekt angewendet und enthält alle Textarten und Sprachen (Beispiel in 5.4).
+- Es gibt **keinen neuen JSON-Exporter**. Der vorhandene Export „CanOpenNode Protobuf (json)“ wird auf das Meta-Projekt angewendet und enthält alle Textarten und Sprachen, auch die Beschreibung (Beispiel in 5.4).
 - Das JSON des Geräts enthält zusätzlich `metaRef`. Die Weboberfläche löst die Zuordnung nach der Regel aus 5.2 auf.
 - Der vorhandene CouchDB-Upload arbeitet mit demselben Modell und überträgt die Texte damit ebenfalls.
 
@@ -270,47 +301,60 @@ lv_label_set_text_static(label, meta_text(meta_find(0x2100, 0), META_TEXT_LABEL_
 
 | # | Paket | Repo | Umfang | Für Upstream geeignet |
 |---|---|---|---|---|
-| 1 | Formatbeschreibung (englisch): Eigenschaften, Protobuf-Felder, Textarten; als Vorschlag bei Upstream einstellen | CANopenEditor | klein | ja, als Issue |
-| 2 | Texte, `CO_metaRef` und Projektangaben durch alle Modelle führen (XDD 1.1, Protobuf, JSON); GUI 1 und GUI 2 erhalten sie beim Speichern | CANopenEditor | mittel | ja, eigener PR |
+| 1 | Formatbeschreibung (englisch) im Repo: Eigenschaften, Protobuf-Felder, Textarten, Wertetexte | CANopenEditor | klein | ja, als Grundlage der PRs |
+| 2 | Texte, Einheiten, Wertetexte, `CO_metaRef` und Projektangaben durch alle Modelle führen (XDD 1.1, Protobuf, JSON); GUI 1 und GUI 2 erhalten sie beim Speichern | CANopenEditor | mittel | ja, eigener PR |
 | 3 | Dasselbe im XDD-Codec des Web-Editors, Meta-Modell, „Create meta project“, „Sync with OD“ | Web | mittel | nein (eigener Editor) |
-| 4 | Meta-Reiter mit Detail- und Tabellenansicht, Prüfungen | Web | groß | nein |
+| 4 | Meta-Reiter: Texte, Einheit, Wertetexte, Tabellenansicht, Prüfungen | Web | groß | nein |
 | 5 | Meta-Adresse im OD, Kopplung der Auswahl in beide Richtungen | Web | mittel | nein |
-| 6 | Exporter „CanOpenNode Meta“ (`meta.c` / `meta.h`), Anbindung an `--export-project` | CANopenEditor | groß | ja, eigener PR |
+| 6 | Exporter „CanOpenNode Meta“ (`meta.c` / `meta.h`) mit Wertelisten, Anbindung an `--export-project` | CANopenEditor | groß | ja, eigener PR |
 | 7 | Option für `meta_glyphs.txt` | CANopenEditor | klein | ja, optional |
 | 8 | Export-Menü in der Electron-App, neues EDSSharp-Release | Web, CANopenEditor | klein | nein |
-| 9 | Beispiel im Demo-Netzwerk mit LVGL-Hilfsdatei | CANopenEditor | klein | als Beispiel |
+| 9 | Beispiel im Demo-Netzwerk mit Hilfsdatei für LVGL 9 | CANopenEditor | klein | als Beispiel |
+| 10 | Einreichen bei Upstream (Pakete 1, 2, 6, 7), wenn es im Fork läuft | CANopenEditor | klein | – |
 
-**Reihenfolge:** 1 → 2 → 3 → (4, 5 und 6 parallel) → 7 → 8 → 9. Nach Paket 3 und 6 gibt es schon einen durchgehenden Weg von der Datei bis zum C-Code, auch wenn die Oberfläche noch einfach ist.
+**Reihenfolge:** 1 → 2 → 3 → (4, 5 und 6 parallel) → 7 → 8 → 9 → 10. Nach Paket 3 und 6 gibt es schon einen durchgehenden Weg von der Datei bis zum C-Code, auch wenn die Oberfläche noch einfach ist.
 
 Die Pakete 2, 6 und 7 werden im Fork als saubere, getrennte Commits geführt, damit sie sich ohne Nacharbeit bei Upstream einreichen lassen.
 
-**Später, nach Bedarf:** CSV/Excel-Austausch für Übersetzer, Größenanzeige je Sprache im Editor, Einheiten und Wertetexte (z. B. 0 = Aus, 1 = Ein), Platzhalter in Texten (z. B. „Kanal %d“ für Arrays), Meta-Editor in GUI 2.
+**Später, nach Bedarf:** CSV/Excel-Austausch für Übersetzer, Größenanzeige je Sprache im Editor, Platzhalter in Texten (z. B. „Kanal %d“ für Arrays), Meta-Editor in GUI 2.
 
 ### Tests
 
 - **libEDSsharp:** Rundlauf XDD → Protobuf → JSON → XDD ohne Verlust der Texte; Dateien ohne Texte bleiben unverändert; `OD.c` / `OD.h` bleiben gleich.
-- **Generator:** Unit-Tests für Pool, Tabellen und Rückfall. Zusätzlich wird der erzeugte C-Code im CI mit `gcc -Wall -Wextra -Werror` gebaut, und ein kleines Testprogramm liest jeden Text über `meta_find` / `meta_text` zurück und vergleicht ihn mit der Quelle.
+- **Generator:** Unit-Tests für Pool, Tabellen, Wertelisten und Rückfall. Zusätzlich wird der erzeugte C-Code im CI mit `gcc -Wall -Wextra -Werror` gebaut, und ein kleines Testprogramm liest jeden Text über `meta_find` / `meta_text` / `meta_value_text` zurück und vergleicht ihn mit der Quelle.
 - **Web:** Unit-Tests (vitest) für Codec, Auflösung der Meta-Adresse, Abgleich. Der Meta-Editor wird vor dem Commit im Browser geprüft (Regel aus `AGENTS.md`).
 
-## 10. Empfehlungen und offene Entscheidungen
+## 10. Entscheidungen
 
-| # | Frage | Empfehlung |
+Entschieden am 26.11.2026:
+
+| # | Frage | Entscheidung |
 |---|---|---|
-| 1 | Namen der Eigenschaften und Felder (`CO_text:<Textart>:<Sprache>`, `CO_metaRef`, `texts`) | So vorschlagen und vor der Umsetzung mit Upstream abstimmen. |
-| 2 | Wann geht der Vorschlag an Upstream? | Gleich nach Paket 1, noch vor dem Programmieren. Das Issue müsstet ihr selbst einstellen; ich kann den Text liefern. |
-| 3 | Standard-Elemente `<label lang="…">` der XDD zusätzlich nutzen? | Vorerst nein. Sie decken nur eine Bezeichnung je Sprache ab und kollidieren mit dem technischen Namen. Später als Ergänzung möglich. |
-| 4 | Textarten und Längen | Vorschlag aus 5.3, bitte Längen für eure Displays bestätigen. |
-| 5 | Sprachen zum Start, Rückfallsprache | offen |
-| 6 | LVGL-Version (8 oder 9) | Entscheidet nur über die Hilfsdatei `meta_lvgl.c`. LVGL 9.3 bringt ein eigenes Übersetzungsmodul mit Text-Schlüsseln mit; ein Adapter dafür wäre möglich, ist aber langsamer als der Zugriff über IDs. |
-| 7 | Welche Objekte kommen in den Clone? | Vorschlag: ab 0x2000 vorausgewählt, Kommunikationsobjekte nur auf Wunsch. |
-| 8 | Einheiten und Wertetexte gleich mit vorsehen? | Im Format als weitere Textarten möglich, Umsetzung später. |
+| 1 | Dateiformat | Das vorhandene Projektformat von CANopenNode, kein eigenes. |
+| 2 | Abstimmung mit Upstream | Erst im Fork umsetzen, danach mit lauffähigem Code einreichen. |
+| 3 | Textarten | Drei: Bezeichnung (16), Tooltip (128), Beschreibung (unbegrenzt). |
+| 4 | Was geht in die Firmware? | Bezeichnung immer, Tooltip nur für ausgewählte Einträge, Beschreibung nie. |
+| 5 | Sprachen | Deutsch und Englisch, Rückfallsprache Deutsch. |
+| 6 | Einheiten und Wertetexte | Von Anfang an dabei. Wertetexte nur für Aufzählungen; Bits haben eigene OD-Adressen. |
+| 7 | LVGL-Version | LVGL 9. |
+| 8 | Umfang des Clones | Objekte ab 0x2000 vorausgewählt. |
+
+Annahmen, die ich ohne Rückfrage getroffen habe (bitte widersprechen, falls falsch):
+
+| # | Annahme |
+|---|---|
+| A | Wertetexte dürfen 16 Zeichen lang sein (wie die Bezeichnung) und gehen alle in die Firmware. |
+| B | Werte von Aufzählungen passen in 32 Bit (`int32_t`). |
+| C | Die Einheit ist eine eigene Textart und darf je Sprache abweichen. |
+| D | Die Standard-Elemente `<label lang="…">` der XDD werden nicht benutzt (Begründung in 5.4). |
+| E | Das Meta-Projekt heißt wie das OD mit dem Zusatz `_meta`, z. B. `geraet_meta.xdd`. |
 
 ## 11. Risiken
 
-- **Upstream möchte andere Namen oder lehnt ab.** Gegenmittel: früh abstimmen (Entscheidung 2); die Erweiterung ist additiv und bleibt im Fork auch allein lauffähig.
-- **Feldnummern im Protobuf kollidieren mit späteren Upstream-Feldern.** Gegenmittel: eigenen Nummernbereich wählen und abstimmen.
+- **Upstream möchte beim Einreichen andere Namen oder lehnt ab.** Die Erweiterung ist additiv und bleibt im Fork auch allein lauffähig; bei einer Umbenennung liest der Code alte und neue Namen (Leitlinie 7).
+- **Feldnummern im Protobuf kollidieren mit späteren Upstream-Feldern.** Gegenmittel: eigenen, hohen Nummernbereich wählen.
 - **OD und Meta laufen auseinander** (Objekt gelöscht oder umnummeriert). Gegenmittel: „Sync with OD“ im Editor, Warnungen im Generator, auf Wunsch Abbruch im strengen Modus.
 - **Werkzeuge ohne die Erweiterung verwerfen die neuen Eigenschaften** beim Speichern (z. B. der unveränderte Upstream-Editor, solange die Erweiterung dort nicht aufgenommen ist). Die eigenen Werkzeuge erhalten sie nach Paket 2 und 3.
-- **Die XDD wird größer**, weil jeder Text eine eigene Eigenschaft ist. Für die Firmware ohne Belang; die Datei bleibt lesbar und in Git vergleichbar.
-- **Flash-Bedarf** wächst mit jeder Sprache. Gegenmittel: Auswahl je Textart und Eintrag, Sprachen beim Export abwählbar, Größenangabe im Generator-Protokoll.
+- **Die XDD wird größer**, weil jeder Text eine eigene Eigenschaft ist, vor allem durch die unbegrenzte Beschreibung. Für die Firmware ohne Belang; die Datei bleibt lesbar und in Git vergleichbar.
+- **Flash-Bedarf** wächst mit jeder Sprache und jedem Tooltip. Gegenmittel: Häkchen je Eintrag, Sprachen beim Export abwählbar, Größenangabe im Generator-Protokoll.
 - **Zeichen fehlen in der LVGL-Schrift.** Gegenmittel: `meta_glyphs.txt` im Schrift-Build verwenden.
