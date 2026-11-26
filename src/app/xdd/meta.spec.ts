@@ -411,8 +411,19 @@ describe('meta address suggestions', () => {
     const meta = project();
     const temp2 = createEntry({ index: 0x2105, name: 'Temperature 2', dataType: 'UNSIGNED32' });
     const suggestions = suggestMetaAddresses(meta, temp2, null);
-    expect(suggestions[0]).toMatchObject({ ref: '0x2100', name: 'Temperature', label: 'Kesseltemp.' });
+    expect(suggestions[0]).toMatchObject({ ref: '0x2100', name: 'Temperature', label: 'Kesseltemp.', similarity: 1 });
     expect(suggestions.map((s) => s.ref)).toContain('0x2101');
+  });
+
+  it('reports the similarity of the names apart from the rank', () => {
+    const meta = project();
+    const boiler = createEntry({ index: 0x2105, name: 'Boiler temperature', dataType: findObject(meta, 0x2100)!.dataType });
+    const best = suggestMetaAddresses(meta, boiler, null)[0];
+    expect(best.ref).toBe('0x2100');
+    expect(best.similarity).toBeCloseTo(nameSimilarity('Boiler temperature', 'Temperature'), 10);
+    expect(best.similarity).toBeLessThan(1);
+    // same data type and existing texts move the entry up, the similarity stays what it is
+    expect(best.score).toBeGreaterThan(best.similarity);
   });
 
   it('leaves out entries of the same object and unrelated names', () => {

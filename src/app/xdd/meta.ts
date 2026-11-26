@@ -293,7 +293,9 @@ export interface MetaSuggestion {
   name: string;
   /** Label in the fallback language, if any. */
   label: string;
-  /** 0..1, higher is more similar. */
+  /** Similarity of the names alone, 0..1; 1 for the same name (numbers and case ignored). */
+  similarity: number;
+  /** Rank, 0..1: the similarity plus what else fits (data type, sub-index, numbers, existing texts). */
   score: number;
 }
 
@@ -375,10 +377,11 @@ export function suggestMetaAddresses(meta: DeviceDocument, object: OdEntry, sub:
     const labels = Object.entries(target.texts)
       .filter(([key]) => splitTextKey(key)?.kind === 'label')
       .map(([, text]) => text);
-    let score = Math.max(nameSimilarity(entry.name, target.name), ...labels.map((label) => nameSimilarity(entry.name, label) * 0.95));
-    if (score < 0.5) {
+    const similarity = Math.max(nameSimilarity(entry.name, target.name), ...labels.map((label) => nameSimilarity(entry.name, label) * 0.95));
+    if (similarity < 0.5) {
       continue;
     }
+    let score = similarity;
     if (wantObject) {
       if (candidate.object.subObjects.length === object.subObjects.length) {
         score += 0.05;
@@ -400,7 +403,7 @@ export function suggestMetaAddresses(meta: DeviceDocument, object: OdEntry, sub:
     // a reference to a VAR is written without sub-index, a sub entry with it
     const address = candidate.address;
     const ref = address.sub === 0 && !isComplex(candidate.object) ? formatMetaAddress({ index: address.index, sub: null }) : formatMetaAddress(address);
-    result.push({ ref, address, name: target.name, label: getText(target, 'label', fallback), score: Math.min(1, score) });
+    result.push({ ref, address, name: target.name, label: getText(target, 'label', fallback), similarity, score: Math.min(1, score) });
   }
   return result
     .sort((a, b) => b.score - a.score || a.address.index - b.address.index || (a.address.sub ?? -1) - (b.address.sub ?? -1))

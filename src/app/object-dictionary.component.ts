@@ -38,6 +38,7 @@ import { UnsavedEditsService } from './state/unsaved-edits.service';
 import { MetaLinkService } from './state/meta-link.service';
 import {
   MetaSuggestion,
+  TEXT_KIND_LABELS,
   displayText,
   entryAt,
   fallbackOf,
@@ -47,6 +48,7 @@ import {
   ownAddress,
   parseMetaAddress,
   suggestMetaAddresses,
+  valueTexts,
 } from './xdd/meta';
 import { ViewStateService } from './state/view-state.service';
 
@@ -166,13 +168,29 @@ interface OdViewState {
             <span>Denotation</span>
             <input class="peach" [ngModel]="draftDenotation" (ngModelChange)="setDraft('denotation', $event)" [disabled]="!editing()" />
           </label>
-          <div class="od-name-row">
+          <div class="od-name-row meta-row">
             <label class="od-line" title="Meta entry whose display texts apply, e.g. 0x1400 or 0x1400:01. Empty: own address.">
               <span>Meta address</span>
-              <input [ngModel]="draftMetaRef" (ngModelChange)="setDraft('metaRef', $event)" [disabled]="!editing()"
+              <input #metaRefInput [ngModel]="draftMetaRef" (ngModelChange)="setDraft('metaRef', $event)" [disabled]="!editing()"
                      [placeholder]="metaPlaceholder()" [class.invalid]="!metaRefValid()" list="od-meta-address-options" />
             </label>
-            <span class="meta-preview" [class.missing]="metaPreview().missing">{{ metaPreview().text }}</span>
+            @if (metaPreview(); as preview) {
+              <span class="meta-preview">
+                <span class="meta-preview-tag" [class.linked]="preview.state === 'linked'" [class.missing]="preview.state === 'missing'"
+                      [class.flash]="previewFlash" (animationend)="previewFlash = false" [title]="preview.title">
+                  <span aria-hidden="true">&rarr;</span>
+                  @if (preview.address) {
+                    <code>{{ preview.address }}</code>
+                  }
+                  @if (preview.label) {
+                    <span class="meta-preview-label">{{ preview.label }}</span>
+                  }
+                  @if (preview.note) {
+                    <span class="meta-preview-note">{{ preview.note }}</span>
+                  }
+                </span>
+              </span>
+            }
             <button type="button" class="system standard-size" (click)="openMeta.emit()" [disabled]="!editing()">Texts...</button>
           </div>
           <datalist id="od-meta-address-options">
@@ -180,16 +198,21 @@ interface OdViewState {
               <option [value]="option.ref">{{ option.text }}</option>
             }
           </datalist>
-          @if (shownSuggestions().length) {
-            <div class="meta-suggestions">
-              <span>Similar:</span>
-              @for (suggestion of shownSuggestions(); track suggestion.ref) {
-                <button type="button" class="meta-chip" (click)="useSuggestion(suggestion)"
-                        [title]="'Use the texts of ' + suggestion.ref + ' (' + similarityText(suggestion) + ')'">
-                  <code>{{ suggestion.ref }}</code> {{ suggestion.name }}@if (suggestion.label && suggestion.label !== suggestion.name) {<em>&ldquo;{{ suggestion.label }}&rdquo;</em>}
-                </button>
-              }
-            </div>
+          @if (shownSuggestions(); as suggestions) {
+            @if (suggestions.length) {
+              <div class="meta-suggestions" role="group" aria-label="Meta entries with a similar name">
+                <span class="meta-suggestions-title">Similar:</span>
+                <div class="meta-suggestions-list">
+                  @for (suggestion of suggestions; track suggestion.ref) {
+                    <button type="button" class="meta-chip" (click)="useSuggestion(suggestion, metaRefInput)" [title]="suggestionTitle(suggestion)">
+                      <code>{{ suggestion.ref }}</code>
+                      <span class="meta-chip-text">{{ suggestion.name }}@if (suggestion.label && suggestion.label !== suggestion.name) {<span class="meta-chip-label">{{ suggestion.label }}</span>}</span>
+                      <span class="meta-chip-match" [attr.data-level]="matchLevel(suggestion)" aria-hidden="true"><i></i><i></i><i></i></span>
+                    </button>
+                  }
+                </div>
+              </div>
+            }
           }
           <label class="od-line od-description">
             <span>Description</span>
@@ -514,24 +537,47 @@ export class ObjectDictionaryComponent {
     return `own address (${formatMetaAddress(ownAddress(parent, sub))})`;
   }
 
-  /** Meta entry and its label for the drafted meta address. */
-  metaPreview(): { text: string; missing: boolean } {
+  /** Briefly highlights the preview after a suggestion was taken over. */
+  previewFlash = false;
+
+  /**
+   * Meta entry and its label for the drafted meta address; null without a meta project.
+   * State "own": the entry uses its own address, "linked": the texts of another entry, "missing": nothing usable there.
+   */
+  metaPreview(): { state: 'own' | 'linked' | 'missing'; address: string; label: string; note: string; title: string } | null {
     const parent = this.selected();
     const meta = this.metaDocument();
-    if (!parent || !meta || !this.metaRefValid()) {
-      return { text: '', missing: false };
+    if (!parent || !meta) {
+      return null;
+    }
+    const draft = this.draftMetaRef.trim();
+    if (!this.metaRefValid()) {
+      return { state: 'missing', address: '', label: '', note: 'not a meta address', title: 'Use e.g. 0x1400 or 0x1400:01, or leave the field empty.' };
     }
     const sub = this.selectedSub();
-    const draftParent = sub ? parent : { ...parent, metaRef: this.draftMetaRef.trim() };
-    const draftSub = sub ? { ...sub, metaRef: this.draftMetaRef.trim() } : null;
+    const draftParent = sub ? parent : { ...parent, metaRef: draft };
+    const draftSub = sub ? { ...sub, metaRef: draft } : null;
     const address = metaAddressIn(meta, draftParent, draftSub);
+    const text = formatMetaAddress(address);
+    const linked = text !== formatMetaAddress(ownAddress(parent, sub));
     const entry = entryAt(meta, address);
     if (!entry) {
-      return { text: `→ ${formatMetaAddress(address)} (not in meta project)`, missing: !!this.draftMetaRef.trim() };
+      return {
+        state: draft ? 'missing' : 'own',
+        address: text,
+        label: '',
+        note: 'not in meta project',
+        title: `The meta project has no entry ${text}: no display texts for this entry.`,
+      };
     }
     const fallback = fallbackOf(meta);
-    const label = displayText(entry, 'label', fallback, fallback);
-    return { text: `→ ${formatMetaAddress(address)}${label ? ` "${label}"` : ''}`, missing: false };
+    return {
+      state: linked ? 'linked' : 'own',
+      address: text,
+      label: displayText(entry, 'label', fallback, fallback),
+      note: '',
+      title: linked ? `Uses the display texts of ${text} "${entry.name}".` : `Uses its own display texts (${text}).`,
+    };
   }
 
   private suggestionCache: { key: string; meta: DeviceDocument | null; value: MetaSuggestion[] } = { key: '', meta: null, value: [] };
@@ -573,7 +619,10 @@ export class ObjectDictionaryComponent {
     if (!meta || !this.editing()) {
       return [];
     }
-    const options = this.metaSuggestions().map((suggestion) => ({ ref: suggestion.ref, text: `${suggestion.name} (similar)` }));
+    const options = this.metaSuggestions().map((suggestion) => ({
+      ref: suggestion.ref,
+      text: `${suggestion.label && suggestion.label !== suggestion.name ? `${suggestion.name} – ${suggestion.label}` : suggestion.name} (similar)`,
+    }));
     const seen = new Set(options.map((option) => option.ref));
     const fallback = fallbackOf(meta);
     for (const { address, object, sub } of metaEntries(meta)) {
@@ -590,11 +639,40 @@ export class ObjectDictionaryComponent {
   }
 
   similarityText(suggestion: MetaSuggestion): string {
-    return suggestion.score >= 0.99 ? 'same name' : `similar name, ${Math.round(suggestion.score * 100)} %`;
+    return suggestion.similarity >= 0.999 ? 'same name' : `${Math.round(suggestion.similarity * 100)} % similar`;
   }
 
-  useSuggestion(suggestion: MetaSuggestion): void {
+  /** 3: same or almost the same name, 2: similar, 1: related. */
+  matchLevel(suggestion: MetaSuggestion): number {
+    return suggestion.similarity >= 0.95 ? 3 : suggestion.similarity >= 0.72 ? 2 : 1;
+  }
+
+  /** Tooltip of a suggestion: what it is and which texts the entry would get. */
+  suggestionTitle(suggestion: MetaSuggestion): string {
+    const lines = [`Use the texts of ${suggestion.ref} "${suggestion.name}" (${this.similarityText(suggestion)})`];
+    const meta = this.metaDocument();
+    const entry = meta ? entryAt(meta, suggestion.address) : null;
+    if (meta && entry) {
+      const fallback = fallbackOf(meta);
+      for (const kind of ['label', 'unit', 'tooltip'] as const) {
+        const text = displayText(entry, kind, fallback, fallback);
+        if (text) {
+          lines.push(`${TEXT_KIND_LABELS[kind]}: ${text}`);
+        }
+      }
+      const values = valueTexts(entry).length;
+      if (values) {
+        lines.push(`Value texts: ${values}`);
+      }
+    }
+    return lines.join('\n');
+  }
+
+  useSuggestion(suggestion: MetaSuggestion, field?: HTMLInputElement): void {
     this.setDraft('metaRef', suggestion.ref);
+    this.previewFlash = true;
+    // the chip disappears with the click: keep the keyboard focus in the row
+    field?.focus();
   }
 
   /** Sets the meta address of all selected objects. */

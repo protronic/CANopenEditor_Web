@@ -1016,44 +1016,140 @@ app-pdo-view {
 /* Display texts (meta address in the object dictionary, meta projects in the device list) */
 .od input.invalid { border-color: #d4503a; background: #fde4dc; }
 
+/* Where the display texts come from: fixed width, so the input does not jump between entries. */
 .meta-preview {
-  flex: 0 1 16rem;
+  flex: 0 2 17rem;
   min-width: 0;
+  display: flex;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.8rem;
-  color: var(--muted);
+  /* room for the highlight around the tag */
+  padding: 0.3rem;
+  margin: -0.3rem;
 }
 
-.meta-preview.missing { color: #b8341c; }
+/* In a narrow window the input keeps its width and the preview gives way. */
+.od-name-row.meta-row > .od-line { flex: 1 1 14rem; min-width: 13rem; }
 
-.meta-suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.3rem;
-  margin: -0.1rem 0 0.1rem 6.85rem;
-  font-size: 0.76rem;
+.meta-preview-tag {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.12rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  line-height: 1.35;
   color: var(--muted);
+  white-space: nowrap;
+}
+
+.meta-preview-tag code { flex: none; font-family: var(--mono); font-size: 0.74rem; }
+.meta-preview-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.meta-preview-note { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-style: italic; }
+
+.meta-preview-tag.linked { background: #e6f1ef; border-color: #c3dcd8; color: var(--teal); }
+.meta-preview-tag.missing { background: #fde9e3; border-color: #f0c2b6; color: #a8321c; }
+.meta-preview-tag.flash { animation: meta-preview-flash 0.7s ease-out; }
+
+@keyframes meta-preview-flash {
+  0% { box-shadow: 0 0 0 0 rgb(15 110 107 / 45%); }
+  100% { box-shadow: 0 0 0 0.5rem rgb(15 110 107 / 0%); }
+}
+
+/* Suggestions below the field "Meta address", aligned with the inputs. */
+.meta-suggestions {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  column-gap: 0.4rem;
+  margin: -0.05rem 0 0.15rem 6.85rem;
+  font-size: 0.76rem;
+  line-height: 1.55;
+  color: var(--muted);
+  animation: meta-suggestions-in 0.14s ease-out;
+}
+
+/* same line box as the chips (1px border) */
+.meta-suggestions-title { padding-top: 1px; }
+
+/* Further lines start below the first chip, not below the title. */
+.meta-suggestions-list { display: flex; flex-wrap: wrap; gap: 0.3rem 0.4rem; min-width: 0; }
+
+@keyframes meta-suggestions-in {
+  from { opacity: 0; transform: translateY(-0.15rem); }
+  to { opacity: 1; transform: none; }
 }
 
 .od button.meta-chip {
-  background: #eef5f4;
-  color: var(--ink);
-  border: 1px solid #b9d6d3;
-  border-radius: 999px;
-  padding: 0.05rem 0.55rem;
-  font-size: 0.76rem;
+  display: inline-flex;
+  align-items: stretch;
+  min-width: 0;
   max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid #c3dcd8;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  line-height: inherit;
+  box-shadow: var(--shadow);
+  transition: border-color 0.12s, background-color 0.12s, box-shadow 0.12s;
+}
+
+.od button.meta-chip code {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 0.45rem 0 0.6rem;
+  background: #e6f1ef;
+  color: var(--teal);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  transition: background-color 0.12s, color 0.12s;
+}
+
+.meta-chip-text {
+  min-width: 0;
+  padding: 0 0.1rem 0 0.45rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.od button.meta-chip:hover { background: #dcecea; }
-.od button.meta-chip code { font-family: var(--mono); color: var(--teal); }
-.od button.meta-chip em { color: var(--muted); margin-left: 0.3em; }
+.meta-chip-label { color: var(--muted); }
+.meta-chip-label::before { content: "\00b7"; margin: 0 0.35em; }
+
+/* How similar the name is: one to three bars. */
+.meta-chip-match {
+  flex: none;
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 1.5px;
+  height: 0.62rem;
+  align-self: center;
+  margin: 0 0.6rem 0 0.4rem;
+}
+
+.meta-chip-match i { width: 2.5px; border-radius: 1px; background: #cfd9d6; }
+.meta-chip-match i:nth-child(1) { height: 40%; }
+.meta-chip-match i:nth-child(2) { height: 70%; }
+.meta-chip-match i:nth-child(3) { height: 100%; }
+.meta-chip-match[data-level="1"] i:nth-child(-n+1),
+.meta-chip-match[data-level="2"] i:nth-child(-n+2),
+.meta-chip-match[data-level="3"] i { background: var(--teal); }
+
+.od button.meta-chip:hover { border-color: var(--teal); background: #f4faf9; box-shadow: 0 1px 3px rgb(15 110 107 / 22%); }
+.od button.meta-chip:hover code { background: var(--teal); color: white; }
+.od button.meta-chip:active { background: #e6f1ef; box-shadow: none; }
+.od button.meta-chip:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .meta-suggestions, .meta-preview-tag.flash { animation: none; }
+  .od button.meta-chip, .od button.meta-chip code { transition: none; }
+}
 
 .meta-badge {
   margin-left: 0.35rem;
