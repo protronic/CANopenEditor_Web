@@ -17,7 +17,16 @@ dictionary saved as `<name>_meta.xdd`, and stored as `CO_text:*` properties in t
 [docs/meta-texts.md](https://github.com/protronic/CANopenEditor/blob/main/docs/meta-texts.md) in CANopenEditor).
 
 - *Create meta project from OD* copies the objects (by default from 0x2000) and prefills the labels with
-  the names. *Sync with OD* adds new objects later; texts are kept.
+  the names. *Sync with OD* adds new objects later; texts are kept. *Max. label* (32 characters by
+  default, also under *Settings*) is the length from which a label is reported as too long.
+- In the list, every object starts with a line; ARRAYs and RECORDs have a darker row and their sub
+  entries a coloured guide. The arrow in front of an object folds its sub entries away (*Collapse all* /
+  *Expand all* for the whole list; a filter text lists its matches anyway).
+- Entries the display does not show can be switched off with *On display* in the entry: they leave the
+  list and the checks and are not exported to the firmware, their texts are kept. Switching off an
+  ARRAY or RECORD includes its sub entries; with several entries selected (Ctrl / Shift + click) it
+  applies to all of them. *Hidden (n)* above the list shows them again, greyed. Sub-index 0 (*Highest
+  sub-index supported*) starts switched off.
 - The field *Meta address* in the object dictionary lets several entries share texts, e.g. all RPDO
   communication parameters use the texts of 0x1400 (context menu *Meta address...* for several objects).
   Below the field, meta entries with a similar name or label are offered (*Similar:*, the bars show

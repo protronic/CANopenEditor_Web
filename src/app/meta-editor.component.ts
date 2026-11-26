@@ -28,6 +28,9 @@ import {
   fallbackOf,
   formatMetaAddress,
   getText,
+  isComplex,
+  isExportOff,
+  isHidden,
   isValidMultiplier,
   languagesOf,
   maxLength,
@@ -36,6 +39,7 @@ import {
   parseValue,
   removeMetaEntry,
   sameAddress,
+  setExportOff,
   setText,
   setValueTexts,
   syncWithOd,
@@ -49,10 +53,19 @@ interface ListRow {
   address: MetaAddress;
   entry: OdEntry;
   isSub: boolean;
+  /** ARRAY/RECORD object: its sub entries follow and can be folded away. */
+  isHead: boolean;
+  /** Not shown on the display (not exported). */
+  hidden: boolean;
+  /** Hidden by its own mark, not only because its object is hidden. */
+  hiddenOwn: boolean;
   addressText: string;
   name: string;
   text: string;
   issue: boolean;
+  /** Head rows: number of listed sub entries and whether one of them has a finding. */
+  subCount: number;
+  subIssue: boolean;
 }
 
 interface ValueRow {
@@ -108,15 +121,32 @@ interface ValueRow {
           <div class="meta-body">
             <div class="meta-list">
               <input class="meta-filter" placeholder="Filter (address, name, text)" [(ngModel)]="filter" />
+              <div class="list-tools">
+                <button type="button" class="quiet" (click)="collapseAll()" [disabled]="filtering() || !canCollapse()"
+                        title="Show the objects without their sub entries">Collapse all</button>
+                <button type="button" class="quiet" (click)="expandAll()" [disabled]="filtering() || !collapsed.size"
+                        title="Show all sub entries">Expand all</button>
+                <span class="meta-spacer"></span>
+                <label class="inline-check" title="Also list the entries that are not shown on the display (see 'On display' of an entry)">
+                  <input type="checkbox" [(ngModel)]="showHidden" />Hidden ({{ hiddenCount() }})
+                </label>
+              </div>
               <div class="meta-scroll">
                 <table>
                   <thead><tr><th>Address</th><th>Name</th><th>{{ language }}</th></tr></thead>
                   <tbody>
                     @for (row of rows(); track row.key) {
                       <tr [class.selected]="isSelected(row.address)" [class.extra]="extra.has(row.key)" [class.sub]="row.isSub"
+                          [class.object]="!row.isSub" [class.head]="row.isHead" [class.off]="row.hidden"
                           (click)="clickRow($event, row)">
-                        <td>{{ row.addressText }}@if (row.issue) {<span class="dot" title="See checks">●</span>}</td>
-                        <td>{{ row.name }}</td>
+                        <td>
+                          @if (row.isHead) {
+                            <button type="button" class="twisty" (click)="toggle($event, row)" [disabled]="filtering()"
+                                    [attr.aria-expanded]="!isCollapsed(row)"
+                                    [title]="isCollapsed(row) ? 'Show the sub entries' : 'Hide the sub entries'">{{ isCollapsed(row) ? '▸' : '▾' }}</button>
+                          }{{ row.addressText }}@if (row.issue || (row.subIssue && isCollapsed(row))) {<span class="dot" title="See checks">●</span>}
+                        </td>
+                        <td>{{ row.name }}@if (row.isHead && isCollapsed(row)) {<small class="sub-count" title="Sub entries">{{ row.subCount }}</small>}@if (row.hiddenOwn) {<small class="off-tag">hidden</small>}</td>
                         <td>{{ row.text }}</td>
                       </tr>
                     }
@@ -134,6 +164,10 @@ interface ValueRow {
                     <small>{{ structureInfo(entry) }}</small>
                   </div>
                   <div class="entry-actions">
+                    @let shown = visibility();
+                    <label class="inline-check on-display" [title]="shown.hint">
+                      <input type="checkbox" [ngModel]="!shown.hidden" (ngModelChange)="setOnDisplay($event)" [disabled]="shown.inherited" />On display@if (extra.size) {<small>&nbsp;({{ extra.size + 1 }} entries)</small>}
+                    </label>
                     <button type="button" class="quiet" (click)="step(-1)" [disabled]="!canStep(-1)" title="Previous entry (Alt+↑)" aria-label="Previous entry">‹</button>
                     <button type="button" class="quiet" (click)="step(1)" [disabled]="!canStep(1)" title="Next entry (Alt+↓)" aria-label="Next entry">›</button>
                     @if (canRemove()) {
@@ -142,7 +176,11 @@ interface ValueRow {
                   </div>
                 </div>
 
-                <div class="preview" [title]="'How the texts are shown in ' + language">
+                @if (visibility().hidden) {
+                  <p class="off-note">{{ visibility().note }}</p>
+                }
+
+                <div class="preview" [class.off]="visibility().hidden" [title]="'How the texts are shown in ' + language">
                   <span class="preview-tag">Preview · {{ language }}</span>
                   <div class="preview-row">
                     @if (pv.label) {
@@ -278,6 +316,9 @@ interface ValueRow {
                 </select>
               </label>
               <label class="od-check"><input type="checkbox" [(ngModel)]="onlyMissing" /><span>Only missing translations</span></label>
+              <label class="od-check" title="Also list the entries that are not shown on the display">
+                <input type="checkbox" [(ngModel)]="showHidden" /><span>Hidden ({{ hiddenCount() }})</span>
+              </label>
               <input class="meta-filter" placeholder="Filter" [(ngModel)]="filter" />
             </div>
             <div class="meta-scroll">
@@ -290,9 +331,9 @@ interface ValueRow {
                 </thead>
                 <tbody>
                   @for (row of tableRows(); track row.key) {
-                    <tr [class.sub]="row.isSub">
+                    <tr [class.sub]="row.isSub" [class.object]="!row.isSub" [class.head]="row.isHead" [class.off]="row.hidden">
                       <td>{{ row.addressText }}</td>
-                      <td>{{ row.name }}</td>
+                      <td>{{ row.name }}@if (row.hiddenOwn) {<small class="off-tag">hidden</small>}</td>
                       @for (l of languages(); track l) {
                         <td>
                           <input [ngModel]="text(row.entry, tableKind, l)" (ngModelChange)="setEntryText(row.entry, tableKind, l, $event)"
@@ -334,7 +375,9 @@ interface ValueRow {
           <label class="od-line"><span>Languages</span><input [(ngModel)]="createLanguages" name="languages" placeholder="de, en" /></label>
           <label class="od-line"><span>Fallback</span><input [(ngModel)]="createFallback" name="fallback" placeholder="de" /></label>
           <label class="od-line"><span>OD language</span><input [(ngModel)]="createSource" name="source" placeholder="en" /></label>
-          <p class="hint">Names and descriptions of the object dictionary prefill label and description in the OD language.</p>
+          <label class="od-line"><span>Max. label</span><input type="number" min="0" [(ngModel)]="createLabelLength" name="labelLength" /></label>
+          <p class="hint">Names and descriptions of the object dictionary prefill label and description in the OD language.
+            Labels longer than the maximum are reported in the checks (0: any length); change it later in Settings.</p>
           <div class="modal-actions">
             <button type="submit">Create</button>
             <span class="modal-spacer"></span>
@@ -384,12 +427,32 @@ interface ValueRow {
     .meta-toolbar .od-check { display: inline-flex; flex-direction: row; align-items: center; gap: 0.35rem; color: var(--ink); }
     .meta-toolbar .od-check input { width: auto; }
     .meta-scroll { flex: 1; min-height: 0; overflow: auto; }
-    table { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.8rem; margin-top: 0; }
+    .meta-list th:first-child { width: 6.6rem; }
     th, td { border-bottom: 1px solid #ece6db; padding: 0.18rem 0.4rem; text-align: left; vertical-align: top; }
     thead th { position: sticky; top: 0; background: #efe9de; z-index: 1; }
+    .list-tools { display: flex; align-items: center; gap: 0.3rem; padding: 0 0.4rem 0.4rem; font-size: 0.76rem; }
+    .list-tools button { font-size: 0.74rem; padding: 0.1rem 0.5rem; }
+    .list-tools .inline-check { font-size: 0.76rem; }
     .meta-list tr { cursor: pointer; }
-    .meta-list tr.sub td:first-child { padding-left: 1.2rem; }
+    /* Objects stand out from each other: a line above every object, a band for ARRAY/RECORD, a guide along their sub entries. */
+    .meta-list tr.object td, .meta-table tr.object td { border-top: 1px solid #cdc2ae; }
+    .meta-list tr.head td, .meta-table tr.head td { background: #e9e2d3; font-weight: 600; }
+    .meta-list tr.head td:nth-child(3) { font-weight: 400; }
+    .meta-list tr.sub td { background: #fcfaf6; }
+    .meta-list tr.object td:first-child { position: relative; padding-left: 1.5rem; white-space: nowrap; }
+    .meta-list tr.sub td:first-child { padding-left: 2.2rem; box-shadow: inset 4px 0 0 #b9d6d3; white-space: nowrap; }
+    .meta-table tr.sub td:first-child { padding-left: 1.2rem; box-shadow: inset 4px 0 0 #b9d6d3; }
+    .twisty { position: absolute; left: 0.1rem; top: 0; bottom: 0; width: 1.3rem; padding: 0; background: transparent; color: var(--muted); border: 0; border-radius: 3px; font-size: 0.85rem; line-height: 1; }
+    .twisty:hover:not(:disabled) { color: var(--teal); background: rgb(15 110 107 / 12%); }
+    .twisty:disabled { opacity: 0.4; cursor: default; }
+    .sub-count { margin-left: 0.4rem; padding: 0 0.4rem; border-radius: 999px; background: #d6cdbb; color: var(--ink); font-size: 0.68rem; font-weight: 400; }
+    .meta-list tr.off td, .meta-table tr.off td { color: #9b9588; font-style: italic; }
+    .off-tag { margin-left: 0.4rem; padding: 0 0.35rem; border: 1px solid #cfc7b7; border-radius: 3px; font-size: 0.66rem; font-style: normal; font-weight: 400; color: #8a8478; }
     .meta-list tr.selected td { background: #0a64c8; color: white; }
+    .meta-list tr.selected .twisty { color: white; }
+    .meta-list tr.selected .off-tag { color: white; border-color: rgb(255 255 255 / 60%); }
+    .meta-list tr.selected .sub-count { background: rgb(255 255 255 / 25%); color: white; }
     .meta-list tr.extra td { background: #e4eef8; }
     .meta-list td:nth-child(3) { color: var(--muted); }
     .meta-list tr.selected td:nth-child(3) { color: white; }
@@ -399,7 +462,11 @@ interface ValueRow {
     .entry-title { min-width: 0; }
     .entry-title h3 { font-size: 1rem; margin: 0; overflow-wrap: anywhere; }
     .entry-title small { color: var(--muted); font-size: 0.76rem; }
-    .entry-actions { display: flex; gap: 0.3rem; flex: none; }
+    .entry-actions { display: flex; align-items: center; gap: 0.3rem; flex: none; }
+    .on-display { margin-right: 0.4rem; white-space: nowrap; }
+    .on-display small { color: var(--muted); }
+    .off-note { margin: -0.4rem 0 0; padding: 0.35rem 0.6rem; border: 1px solid #e3c79a; border-radius: 4px; background: #fff6e3; color: #7a4a00; font-size: 0.8rem; }
+    .preview.off { opacity: 0.55; }
     .entry-actions button { font-size: 0.85rem; padding: 0.1rem 0.55rem; line-height: 1.4; }
 
     .preview { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 0.45rem 0.7rem 0.55rem; display: flex; flex-direction: column; gap: 0.15rem; }
@@ -501,6 +568,10 @@ export class MetaEditorComponent {
   view: 'entry' | 'table' = 'entry';
   language = '';
   filter = '';
+  /** Also list the entries that are not shown on the display. */
+  showHidden = false;
+  /** Indexes of the ARRAY/RECORD objects whose sub entries are folded away. */
+  collapsed = new Set<number>();
   showIssues = false;
   selected: MetaAddress | null = null;
   extra = new Set<string>();
@@ -513,6 +584,7 @@ export class MetaEditorComponent {
   createLanguages = 'de, en';
   createFallback = 'de';
   createSource = 'en';
+  createLabelLength = DEFAULT_MAX_LENGTH['label'];
 
   settingsOpen = false;
   settingsLanguages = '';
@@ -534,6 +606,7 @@ export class MetaEditorComponent {
           this.seenMeta = meta?.document ?? null;
           this.selected = null;
           this.extra.clear();
+          this.collapsed = new Set<number>();
           this.language = this.fallback();
           if (active && this.wasActive) {
             this.followOd(); // e.g. a meta project was just created or opened
@@ -554,37 +627,139 @@ export class MetaEditorComponent {
 
   // -------------------------------------------------------------------------------- list
 
-  rows(): ListRow[] {
-    this.revision();
+  private rowCache: { key: string; rows: ListRow[]; hidden: number } = { key: '', rows: [], hidden: 0 };
+
+  /**
+   * All entries that pass the filter text and the "Hidden" switch, in address order. An object is listed with
+   * its matching sub entries even if it does not match itself; the selected entry stays listed while it is hidden.
+   */
+  private allRows(): ListRow[] {
+    return this.listed().rows;
+  }
+
+  private listed(): { rows: ListRow[]; hidden: number } {
     const meta = this.meta();
     if (!meta) {
-      return [];
+      return { rows: [], hidden: 0 };
+    }
+    const selectedKey = this.selected ? formatMetaAddress(this.selected) : '';
+    const filter = this.filter.trim().toLowerCase();
+    const key = [meta.id, this.revision(), filter, this.language, this.fallback(), this.showHidden, selectedKey].join('|');
+    if (this.rowCache.key === key) {
+      return this.rowCache;
     }
     const issueKeys = new Set(this.issues().map((issue) => formatMetaAddress(issue.address)));
-    const filter = this.filter.trim().toLowerCase();
-    return metaEntries(meta.document)
-      .map(({ address, object, sub }) => {
-        const entry = sub ?? object;
-        const addressText = formatMetaAddress(address);
-        return {
-          key: addressText,
-          address,
-          entry,
-          isSub: sub != null,
-          addressText: sub ? `:${addressText.slice(-2)}` : addressText.replace(/:00$/, ''),
-          name: entry.name,
-          text: displayText(entry, 'label', this.language, this.fallback()),
-          issue: issueKeys.has(addressText),
-        };
-      })
-      .filter((row) => !filter || row.addressText.toLowerCase().includes(filter) || row.key.toLowerCase().includes(filter)
-        || row.name.toLowerCase().includes(filter) || Object.values(row.entry.texts).some((text) => text.toLowerCase().includes(filter)));
+    const rows: ListRow[] = [];
+    let hiddenCount = 0;
+    let head: ListRow | null = null;
+    let headListed = false;
+    for (const { address, object, sub } of metaEntries(meta.document)) {
+      const entry = sub ?? object;
+      const addressText = formatMetaAddress(address);
+      const hidden = isHidden(object, sub);
+      if (hidden) {
+        hiddenCount++;
+      }
+      const row: ListRow = {
+        key: addressText,
+        address,
+        entry,
+        isSub: sub != null,
+        isHead: sub == null && isComplex(object),
+        hidden,
+        hiddenOwn: isExportOff(entry) || (!sub && object.disabled),
+        addressText: sub ? `:${addressText.slice(-2)}` : addressText.replace(/:00$/, ''),
+        name: entry.name,
+        text: displayText(entry, 'label', this.language, this.fallback()),
+        issue: issueKeys.has(addressText),
+        subCount: 0,
+        subIssue: false,
+      };
+      if (!sub) {
+        head = row;
+        headListed = false;
+      }
+      if (hidden && !this.showHidden && addressText !== selectedKey) {
+        continue;
+      }
+      if (sub && head) {
+        head.subCount++;
+        head.subIssue = head.subIssue || row.issue;
+      }
+      if (filter && !(row.addressText.toLowerCase().includes(filter) || row.key.toLowerCase().includes(filter)
+        || row.name.toLowerCase().includes(filter) || Object.values(entry.texts).some((text) => text.toLowerCase().includes(filter)))) {
+        continue;
+      }
+      if (sub && head && !headListed) {
+        rows.push(head);
+      }
+      headListed = true;
+      rows.push(row);
+    }
+    this.rowCache = { key, rows, hidden: hiddenCount };
+    return this.rowCache;
+  }
+
+  /** Rows of the list: without the sub entries of collapsed objects. A filter text lists its matches anyway. */
+  rows(): ListRow[] {
+    const all = this.allRows();
+    if (this.filtering() || !this.collapsed.size) {
+      return all;
+    }
+    return all.filter((row) => !row.isSub || !this.collapsed.has(row.address.index));
   }
 
   tableRows(): ListRow[] {
     const languages = this.languages();
-    return this.rows().filter((row) => !this.onlyMissing
+    return this.allRows().filter((row) => !this.onlyMissing
       || (languages.some((l) => getText(row.entry, this.tableKind, l)) && languages.some((l) => !getText(row.entry, this.tableKind, l))));
+  }
+
+  /** Number of entries that are not shown on the display. */
+  hiddenCount(): number {
+    return this.listed().hidden;
+  }
+
+  filtering(): boolean {
+    return this.filter.trim() !== '';
+  }
+
+  // -------------------------------------------------------------------------------- folding
+
+  isCollapsed(row: ListRow): boolean {
+    return !this.filtering() && this.collapsed.has(row.address.index);
+  }
+
+  canCollapse(): boolean {
+    return this.allRows().some((row) => row.isHead && !this.collapsed.has(row.address.index));
+  }
+
+  toggle(event: Event, row: ListRow): void {
+    event.stopPropagation();
+    if (this.collapsed.delete(row.address.index)) {
+      return;
+    }
+    this.collapsed.add(row.address.index);
+    this.selectHeadOfFolded();
+  }
+
+  collapseAll(): void {
+    this.collapsed = new Set(this.allRows().filter((row) => row.isHead).map((row) => row.address.index));
+    this.selectHeadOfFolded();
+  }
+
+  expandAll(): void {
+    this.collapsed = new Set<number>();
+  }
+
+  /** A selected sub entry that was just folded away hands the selection to its object. */
+  private selectHeadOfFolded(): void {
+    const selected = this.selected;
+    if (selected && this.collapsed.has(selected.index) && this.allRows().some((row) => row.isSub && sameAddress(row.address, selected))) {
+      this.extra.clear();
+      this.selected = { index: selected.index, sub: null };
+      this.loadValueRows();
+    }
   }
 
   isSelected(address: MetaAddress): boolean {
@@ -612,6 +787,9 @@ export class MetaEditorComponent {
   }
 
   selectAddress(address: MetaAddress, byUser: boolean): void {
+    if (address.sub != null) {
+      this.collapsed.delete(address.index); // a selected sub entry is always listed
+    }
     this.selected = address;
     this.userSelected = this.userSelected || byUser;
     this.loadValueRows();
@@ -653,6 +831,53 @@ export class MetaEditorComponent {
   tooLong(entry: OdEntry, kind: string, language: string): boolean {
     const max = this.maxOf(kind);
     return max > 0 && this.length(entry, kind, language) > max;
+  }
+
+  /** Whether the selected entry is shown on the display, and if not, why. */
+  visibility(): { hidden: boolean; inherited: boolean; hint: string; note: string } {
+    this.revision();
+    const meta = this.meta();
+    const selected = this.selected;
+    const object = meta && selected ? meta.document.objects.find((entry) => entry.index === selected.index) : undefined;
+    const shownHint = 'Shown on the display: its texts are exported to the firmware. Untick to hide the entry here and leave it out of the export.';
+    if (!object || !selected) {
+      return { hidden: false, inherited: false, hint: shownHint, note: '' };
+    }
+    const sub = isComplex(object) && selected.sub != null ? object.subObjects.find((entry) => entry.subIndex === selected.sub) ?? null : null;
+    const where = formatMetaAddress({ index: object.index, sub: null }).replace(/:00$/, '');
+    if (object.disabled) {
+      const note = `Object ${where} is disabled: it is not part of the firmware and its texts are not exported.`;
+      return { hidden: true, inherited: true, hint: note, note };
+    }
+    if (sub && isExportOff(object)) {
+      const note = `Object ${where} is not shown on the display, so its sub entries are not either. Tick "On display" at the object to change that.`;
+      return { hidden: true, inherited: true, hint: note, note };
+    }
+    if (isHidden(object, sub)) {
+      return {
+        hidden: true,
+        inherited: false,
+        hint: 'Not shown on the display. Tick to show it again.',
+        note: !sub && isComplex(object)
+          ? 'Not shown on the display: this object and its sub entries are left out of the firmware export. The texts are kept.'
+          : 'Not shown on the display: the entry is left out of the firmware export. The texts are kept.',
+      };
+    }
+    return { hidden: false, inherited: false, hint: shownHint, note: '' };
+  }
+
+  /** Shows or hides the selected entry, and the entries selected with it, on the display. */
+  setOnDisplay(on: boolean): void {
+    const entry = this.entry();
+    if (!entry) {
+      return;
+    }
+    const targets = [entry, ...this.allRows().filter((row) => this.extra.has(row.key)).map((row) => row.entry)];
+    targets.forEach((target) => setExportOff(target, !on));
+    if (!on && !this.showHidden) {
+      this.extra.clear(); // they leave the list
+    }
+    this.touch();
   }
 
   setTooltipExport(entry: OdEntry, on: boolean): void {
@@ -889,7 +1114,7 @@ export class MetaEditorComponent {
     if (!meta) {
       return;
     }
-    const targets = this.rows().filter((row) => this.extra.has(row.key)).map((row) => row.entry);
+    const targets = this.allRows().filter((row) => this.extra.has(row.key)).map((row) => row.entry);
     if (!(await this.dialogs.confirm(`Replace the value texts of ${targets.length} selected entries with these ${this.valueRows.length} value texts?`))) {
       return;
     }
@@ -1045,6 +1270,7 @@ export class MetaEditorComponent {
       fallbackLanguage: fallback,
       sourceLanguage: this.createSource.trim(),
       sourceFileName: this.device().fileName,
+      maxLabelLength: Math.max(0, Math.floor(Number(this.createLabelLength)) || 0),
     });
   }
 

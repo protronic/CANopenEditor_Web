@@ -43,6 +43,8 @@ import {
   entryAt,
   fallbackOf,
   formatMetaAddress,
+  isHidden,
+  isHiddenAt,
   metaAddressIn,
   metaEntries,
   ownAddress,
@@ -571,10 +573,21 @@ export class ObjectDictionaryComponent {
       };
     }
     const fallback = fallbackOf(meta);
+    const label = displayText(entry, 'label', fallback, fallback);
+    if (isHiddenAt(meta, address)) {
+      // a meta entry that is not shown on the display has no texts in the firmware
+      return {
+        state: linked ? 'missing' : 'own',
+        address: text,
+        label,
+        note: 'not on display',
+        title: `${text} is not shown on the display (see "On display" in the display texts): its texts are not exported.`,
+      };
+    }
     return {
       state: linked ? 'linked' : 'own',
       address: text,
-      label: displayText(entry, 'label', fallback, fallback),
+      label,
       note: '',
       title: linked ? `Uses the display texts of ${text} "${entry.name}".` : `Uses its own display texts (${text}).`,
     };
@@ -628,7 +641,7 @@ export class ObjectDictionaryComponent {
     for (const { address, object, sub } of metaEntries(meta)) {
       const target = sub ?? object;
       const ref = address.sub === 0 && !sub ? formatMetaAddress({ index: address.index, sub: null }) : formatMetaAddress(address);
-      if (seen.has(ref) || Object.keys(target.texts).length === 0 || options.length >= 400) {
+      if (seen.has(ref) || Object.keys(target.texts).length === 0 || isHidden(object, sub) || options.length >= 400) {
         continue;
       }
       seen.add(ref);

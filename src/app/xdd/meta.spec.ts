@@ -5,6 +5,9 @@ import {
   createMetaProject,
   entryAt,
   formatMetaAddress,
+  isExportOff,
+  isHidden,
+  isHiddenAt,
   metaAddressIn,
   metaEntries,
   nameSimilarity,
@@ -12,6 +15,7 @@ import {
   parseValue,
   removeMetaEntry,
   resolveMetaAddress,
+  setExportOff,
   setValueTexts,
   suggestMetaAddresses,
   syncWithOd,
@@ -355,7 +359,7 @@ describe('meta project', () => {
   it('reports missing translations, long texts and dangling references', () => {
     const source = od();
     findObject(source, 0x2101)!.metaRef = '0x2999';
-    const meta = createMetaProject(od(), { fromIndex: 0x2000, languages: ['de', 'en'], fallbackLanguage: 'de', sourceLanguage: 'de', sourceFileName: 'device.xdd' });
+    const meta = createMetaProject(od(), { fromIndex: 0x2000, languages: ['de', 'en'], fallbackLanguage: 'de', sourceLanguage: 'de', sourceFileName: 'device.xdd', maxLabelLength: 16 });
     findObject(meta, 0x2100)!.texts['label:de'] = 'A label that is too long';
     findObject(meta, 0x2100)!.multiplier = 'abc';
     const issues = checkMeta(meta, source).map((issue) => `${issue.kind} ${issue.message}`);
@@ -363,6 +367,99 @@ describe('meta project', () => {
     expect(issues).toContain('missing-translation 0x2100:00 label: missing en');
     expect(issues).toContain('invalid 0x2100:00: multiplier "abc" is not a number');
     expect(issues).toContain('dangling-ref 0x2101:00: meta address 0x2999:00 does not exist');
+  });
+});
+
+describe('entries not shown on the display', () => {
+  const options = { fromIndex: 0x2000, languages: ['de', 'en'], fallbackLanguage: 'de', sourceLanguage: 'de', sourceFileName: 'device.xdd' };
+
+  it('allows labels of 32 characters by default', () => {
+    const meta = createMetaProject(od(), options);
+    expect(meta.textInfo.maxLength['label']).toBe(32);
+    findObject(meta, 0x2100)!.texts['label:de'] = 'x'.repeat(32);
+    expect(checkMeta(meta, null).filter((issue) => issue.kind === 'too-long')).toEqual([]);
+    findObject(meta, 0x2100)!.texts['label:de'] = 'x'.repeat(33);
+    expect(checkMeta(meta, null).filter((issue) => issue.kind === 'too-long').map((issue) => issue.message))
+      .toEqual(['0x2100:00 label (de): 33 characters, maximum 32']);
+  });
+
+  it('hides an object with its sub entries, or a single sub entry', () => {
+    const meta = createMetaProject(od(), options);
+    const inputs = findObject(meta, 0x2110)!;
+    const sub1 = inputs.subObjects.find((sub) => sub.subIndex === 1)!;
+    const sub2 = inputs.subObjects.find((sub) => sub.subIndex === 2)!;
+    expect(isHidden(inputs, null)).toBe(false);
+
+    setExportOff(sub1, true);
+    expect(isHidden(inputs, sub1)).toBe(true);
+    expect(isHidden(inputs, sub2)).toBe(false);
+    expect(isHidden(inputs, null)).toBe(false);
+    expect(isHiddenAt(meta, { index: 0x2110, sub: 1 })).toBe(true);
+    setExportOff(sub1, false);
+
+    setExportOff(inputs, true);
+    expect(isHidden(inputs, null)).toBe(true);
+    expect(isHidden(inputs, sub1)).toBe(true);
+    expect(isHiddenAt(meta, { index: 0x2110, sub: 2 })).toBe(true);
+    expect(isHiddenAt(meta, { index: 0x2100, sub: 0 })).toBe(false);
+
+    // a disabled object is not exported either
+    const temp = findObject(meta, 0x2100)!;
+    temp.disabled = true;
+    expect(isHidden(temp, null)).toBe(true);
+  });
+
+  it('starts sub-index 0 of arrays and records as not shown on the display', () => {
+    const meta = createMetaProject(od(), options);
+    expect(isHiddenAt(meta, { index: 0x2110, sub: 0 })).toBe(true);
+    expect(isHiddenAt(meta, { index: 0x2110, sub: 1 })).toBe(false);
+    expect(isHiddenAt(meta, { index: 0x2110, sub: null })).toBe(false);
+
+    const source = od();
+    source.objects.push(createEntry({ index: 0x2120, name: 'Outputs', objectType: 'ARRAY', subObjects: [
+      createEntry({ index: 0x2120, subIndex: 0, name: 'Highest sub-index supported' }),
+      createEntry({ index: 0x2120, subIndex: 1, name: 'Output 1' }),
+    ] }));
+    syncWithOd(meta, source, 0x2000, 'de');
+    expect(isHiddenAt(meta, { index: 0x2120, sub: 0 })).toBe(true);
+    expect(isHiddenAt(meta, { index: 0x2120, sub: 1 })).toBe(false);
+  });
+
+  it('keeps the texts and the exported text kinds, and stores the mark like libEDSsharp', () => {
+    const meta = createMetaProject(od(), options);
+    const temp = findObject(meta, 0x2100)!;
+    temp.textExport = ['tooltip'];
+    setExportOff(temp, true);
+    setExportOff(temp, true);
+    expect(temp.textExport).toEqual(['tooltip', 'none']);
+    expect(temp.texts['label:de']).toBe('Temperature');
+
+    const xml = writeXdd(meta);
+    expect(xml).toContain('name="CO_textExport" value="tooltip,none"');
+    const again = findObject(parseXdd(xml), 0x2100)!;
+    expect(isExportOff(again)).toBe(true);
+    setExportOff(again, false);
+    expect(again.textExport).toEqual(['tooltip']);
+  });
+
+  it('leaves hidden entries out of the checks and the suggestions', () => {
+    const source = od();
+    const meta = createMetaProject(od(), { ...options, maxLabelLength: 16 });
+    const temp = findObject(meta, 0x2100)!;
+    temp.texts['label:de'] = 'A label that is too long';
+    expect(checkMeta(meta, source).some((issue) => issue.address.index === 0x2100)).toBe(true);
+    setExportOff(temp, true);
+    expect(checkMeta(meta, source).filter((issue) => issue.address.index === 0x2100)).toEqual([]);
+
+    // an entry that refers to it gets no texts: reported
+    findObject(source, 0x2101)!.metaRef = '0x2100';
+    expect(checkMeta(meta, source).map((issue) => `${issue.kind} ${issue.message}`))
+      .toContain('dangling-ref 0x2101:00: meta address 0x2100:00 is not shown on the display, its texts are not exported');
+
+    const temp2 = createEntry({ index: 0x2105, name: 'Boiler temperature 3', dataType: temp.dataType });
+    expect(suggestMetaAddresses(meta, temp2, null).map((suggestion) => suggestion.ref)).not.toContain('0x2100');
+    setExportOff(temp, false);
+    expect(suggestMetaAddresses(meta, temp2, null).map((suggestion) => suggestion.ref)).toContain('0x2100');
   });
 });
 

@@ -82,7 +82,7 @@
                 <label lang="en">CO_textMaxLength</label>
               </q1:characteristicName>
               <q1:characteristicContent>
-                <label lang="en">label=16</label>
+                <label lang="en">label=32</label>
               </q1:characteristicContent>
               <q1:characteristicContent>
                 <label lang="en">tooltip=128</label>
@@ -123,6 +123,7 @@
             <label lang="en">Highest sub-index supported</label>
             <USINT />
             <q1:defaultValue value="0x04" />
+            <q1:property name="CO_textExport" value="none" />
           </q1:parameter>
           <q1:parameter uniqueID="UID_SUB_200001" access="readWriteOutput">
             <label lang="en">Output 1</label>
@@ -178,6 +179,7 @@
             <label lang="en">Highest sub-index supported</label>
             <USINT />
             <q1:defaultValue value="0x04" />
+            <q1:property name="CO_textExport" value="none" />
           </q1:parameter>
           <q1:parameter uniqueID="UID_SUB_200101">
             <label lang="en">Input 1</label>
@@ -264,6 +266,7 @@
             <label lang="en">Highest sub-index supported</label>
             <USINT />
             <q1:defaultValue value="0x04" />
+            <q1:property name="CO_textExport" value="none" />
           </q1:parameter>
           <q1:parameter uniqueID="UID_SUB_200301">
             <label lang="en">Input D1</label>

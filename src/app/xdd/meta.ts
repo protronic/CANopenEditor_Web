@@ -28,7 +28,7 @@ export const TEXT_KIND_LABELS: Record<TextKind, string> = {
 
 /** Default maximum lengths in characters (0: unlimited). */
 export const DEFAULT_MAX_LENGTH: Record<string, number> = {
-  label: 16,
+  label: 32,
   tooltip: 128,
   description: 0,
   unit: 8,
@@ -36,6 +36,12 @@ export const DEFAULT_MAX_LENGTH: Record<string, number> = {
 };
 
 export const VALUE_PREFIX = 'value.';
+
+/**
+ * Entry of CO_textExport: the entry is not shown on the display, none of its texts are exported into firmware.
+ * On an ARRAY/RECORD object this includes its sub entries.
+ */
+export const EXPORT_NONE = 'none';
 
 /** Address of a meta entry: VAR (sub 0), the ARRAY/RECORD object itself (sub null) or a sub entry. */
 export interface MetaAddress {
@@ -187,6 +193,35 @@ export function displayText(entry: OdEntry | null, kind: string, language: strin
     return '';
   }
   return getText(entry, kind, language) || getText(entry, kind, fallback);
+}
+
+/** True if the entry itself is marked as not shown on the display. */
+export function isExportOff(entry: OdEntry): boolean {
+  return entry.textExport.includes(EXPORT_NONE);
+}
+
+/** Marks an entry as shown or not shown on the display; its texts and exported text kinds are kept. */
+export function setExportOff(entry: OdEntry, off: boolean): void {
+  const kinds = entry.textExport.filter((kind) => kind !== EXPORT_NONE);
+  entry.textExport = off ? [...kinds, EXPORT_NONE] : kinds;
+}
+
+/**
+ * True if a meta entry is not shown on the display: it or its object is marked, or the object is disabled.
+ * Such entries are not exported into firmware.
+ */
+export function isHidden(object: OdEntry, sub: OdEntry | null): boolean {
+  return object.disabled || isExportOff(object) || (sub != null && isExportOff(sub));
+}
+
+/** True if the meta project has an entry at the address and it is not shown on the display. */
+export function isHiddenAt(meta: DeviceDocument, address: MetaAddress): boolean {
+  const object = meta.objects.find((entry) => entry.index === address.index);
+  if (!object) {
+    return false;
+  }
+  const sub = isComplex(object) && address.sub != null ? object.subObjects.find((entry) => entry.subIndex === address.sub) ?? null : null;
+  return isHidden(object, sub);
 }
 
 export function hasTexts(entry: OdEntry): boolean {
@@ -371,7 +406,7 @@ export function suggestMetaAddresses(meta: DeviceDocument, object: OdEntry, sub:
     }
     const target = candidate.sub ?? candidate.object;
     const isObject = candidate.sub == null && isComplex(candidate.object);
-    if (isObject !== wantObject) {
+    if (isObject !== wantObject || isHidden(candidate.object, candidate.sub)) {
       continue;
     }
     const labels = Object.entries(target.texts)
@@ -422,6 +457,8 @@ export interface CreateMetaOptions {
   sourceLanguage: string;
   /** File name of the object dictionary, stored as CO_metaSource. */
   sourceFileName: string;
+  /** Maximum label length in characters (0: unlimited); default DEFAULT_MAX_LENGTH. */
+  maxLabelLength?: number;
 }
 
 /** File name of the meta project of an object dictionary: "device.xdd" -> "device_meta.xdd". */
@@ -430,7 +467,10 @@ export function metaFileName(odFileName: string): string {
   return `${base}_meta.xdd`;
 }
 
-/** Copies the object dictionary into a new meta project; names and descriptions prefill the texts. */
+/**
+ * Copies the object dictionary into a new meta project; names and descriptions prefill the texts.
+ * Sub-index 0 of ARRAYs and RECORDs starts as not shown on the display.
+ */
 export function createMetaProject(od: DeviceDocument, options: CreateMetaOptions): DeviceDocument {
   const meta = structuredClone(od);
   meta.objects = meta.objects.filter((object) => object.index >= options.fromIndex);
@@ -442,14 +482,15 @@ export function createMetaProject(od: DeviceDocument, options: CreateMetaOptions
     ...emptyTextInfo(),
     languages: [...options.languages],
     fallbackLanguage: options.fallbackLanguage,
-    maxLength: { label: DEFAULT_MAX_LENGTH['label'], tooltip: DEFAULT_MAX_LENGTH['tooltip'], unit: DEFAULT_MAX_LENGTH['unit'], value: DEFAULT_MAX_LENGTH['value'] },
+    maxLength: { label: options.maxLabelLength ?? DEFAULT_MAX_LENGTH['label'], tooltip: DEFAULT_MAX_LENGTH['tooltip'], unit: DEFAULT_MAX_LENGTH['unit'], value: DEFAULT_MAX_LENGTH['value'] },
     metaProject: true,
     metaSource: (options.sourceFileName || od.fileName).replace(/^.*[\\/]/, ''),
   };
   for (const { object, sub } of metaEntries(meta)) {
     if (sub?.subIndex === 0) {
       sub.metaRef = '';
-      continue; // "Highest sub-index supported" rarely needs a display text
+      setExportOff(sub, true); // "Highest sub-index supported" is not shown on a display
+      continue;
     }
     prefill(sub ?? object, options.sourceLanguage);
   }
@@ -479,8 +520,8 @@ export interface SyncResult {
 
 /**
  * Brings the meta project in line with the object dictionary: missing objects and sub entries are added
- * (with prefilled label), names, types and structure data are updated, texts are kept. Objects below
- * fromIndex are only updated, not added.
+ * (with prefilled label; sub-index 0 as not shown on the display), names, types and structure data are
+ * updated, texts are kept. Objects below fromIndex are only updated, not added.
  */
 export function syncWithOd(meta: DeviceDocument, od: DeviceDocument, fromIndex: number, sourceLanguage: string): SyncResult {
   const result: SyncResult = { added: [], updated: [], orphaned: [] };
@@ -495,7 +536,9 @@ export function syncWithOd(meta: DeviceDocument, od: DeviceDocument, fromIndex: 
         (sub ?? object).texts = {};
         (sub ?? object).textExport = [];
         (sub ?? object).multiplier = '';
-        if (sub?.subIndex !== 0) {
+        if (sub?.subIndex === 0) {
+          setExportOff(sub, true);
+        } else {
           prefill(sub ?? object, sourceLanguage);
         }
         result.added.push(ownAddress(object, sub));
@@ -513,7 +556,9 @@ export function syncWithOd(meta: DeviceDocument, od: DeviceDocument, fromIndex: 
         copy.texts = {};
         copy.textExport = [];
         copy.multiplier = '';
-        if (copy.subIndex !== 0) {
+        if (copy.subIndex === 0) {
+          setExportOff(copy, true);
+        } else {
           prefill(copy, sourceLanguage);
         }
         metaObject.subObjects.push(copy);
@@ -575,6 +620,9 @@ export function checkMeta(meta: DeviceDocument, od: DeviceDocument | null): Meta
   const issues: MetaIssue[] = [];
   const languages = languagesOf(meta);
   for (const { address, object, sub } of metaEntries(meta)) {
+    if (isHidden(object, sub)) {
+      continue; // not shown on the display: its texts are not exported and need no checks
+    }
     const entry = sub ?? object;
     const where = formatMetaAddress(address);
     const kinds = new Set<string>();
@@ -622,6 +670,8 @@ export function checkMeta(meta: DeviceDocument, od: DeviceDocument | null): Meta
       const target = metaAddressIn(meta, object, sub);
       if (!entryAt(meta, target)) {
         issues.push({ kind: 'dangling-ref', address, message: `${formatMetaAddress(address)}: meta address ${formatMetaAddress(target)} does not exist` });
+      } else if (!object.disabled && isHiddenAt(meta, target)) {
+        issues.push({ kind: 'dangling-ref', address, message: `${formatMetaAddress(address)}: meta address ${formatMetaAddress(target)} is not shown on the display, its texts are not exported` });
       }
     }
   }

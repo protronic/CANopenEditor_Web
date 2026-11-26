@@ -28,6 +28,9 @@ Abweichungen vom Plan:
 - **Verwaiste Einträge** (nicht mehr im OD) lassen sich im Meta-Editor mit „Remove entry“ löschen.
 - **Subindex 0** („Highest sub-index supported“) wird beim Anlegen nicht mit Texten vorbelegt, damit er keinen Flash belegt.
 - **Wertetexte** im C-Code zusätzlich als Liste abrufbar (`meta_value_count`, `meta_value_at`), z. B. für Auswahllisten.
+- **Bezeichnung bis 32 Zeichen** statt 16 als Vorgabe (Rückmeldung aus dem ersten Test mit einem echten Gerät); die Grenze dient nur den Warnungen und ist je Meta-Projekt einstellbar (Anlegen-Dialog und „Settings“).
+- **Nicht auf dem Display** (`CO_textExport = none`): Einträge, die das Display nicht zeigt, werden im Meta-Editor ausgeblendet und nicht nach `meta.c` exportiert; die Texte bleiben in der Datei. Am ARRAY/RECORD gilt das für alle Untereinträge. Subindex 0 startet so.
+- **Liste im Meta-Editor:** Objekte lassen sich einklappen, Objektgrenzen sind farblich abgesetzt.
 
 ---
 
