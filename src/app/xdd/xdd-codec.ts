@@ -22,9 +22,11 @@ import {
   PdoMapping,
   SchemaVersion,
   SrdoAccess,
+  TextInfo,
   createEmptyDocument,
   createEntry,
   emptyBaudRates,
+  isTextInfoEmpty,
   formatDate,
   formatTime,
   hex2,
@@ -188,14 +190,8 @@ export function writeXdd(document: DeviceDocument, now = new Date()): string {
     '      <q1:DeviceFunction>',
     '        <q1:capabilities>',
     '          <q1:characteristicsList>',
-    '            <q1:characteristic>',
-    '              <q1:characteristicName>',
-    '                <label lang="en">SW library</label>',
-    '              </q1:characteristicName>',
-    '              <q1:characteristicContent>',
-    '                <label lang="en">CANopen Editor Web</label>',
-    '              </q1:characteristicContent>',
-    '            </q1:characteristic>',
+    ...characteristicLines('SW library', ['CANopen Editor Web']),
+    ...textInfoLines(document.textInfo),
     '          </q1:characteristicsList>',
     '        </q1:capabilities>',
     '      </q1:DeviceFunction>',
@@ -322,6 +318,7 @@ function readDeviceProfile(document: DeviceDocument, body: Element): void {
   document.productName = directText(identity, 'productName');
   document.productId = directText(identity, 'productID');
   document.orderCode = directText(identity, 'orderNumber');
+  document.textInfo = readTextInfo(body);
   const productText = child(identity, 'productText');
   if (productText) {
     document.description = directText(productText, 'description') || (productText.textContent ?? '').trim();
@@ -567,7 +564,19 @@ function applyParameter(
       case 'CO_stringLengthMin':
         entry.stringLengthMin = Number(value) || 0;
         break;
+      case 'CO_metaRef':
+        entry.metaRef = value;
+        break;
+      case 'CO_textExport':
+        entry.textExport = value.split(',').map((kind) => kind.trim()).filter((kind) => kind);
+        break;
+      case 'CO_multiplier':
+        entry.multiplier = value;
+        break;
       default:
+        if (name.startsWith(TEXT_PROPERTY_PREFIX) && /^[^:]+:[^:]+$/.test(name.slice(TEXT_PROPERTY_PREFIX.length))) {
+          entry.texts[name.slice(TEXT_PROPERTY_PREFIX.length)] = value;
+        }
         break;
     }
   }
@@ -674,8 +683,105 @@ function propertyLines(entry: OdEntry, level: number): string[] {
   if (entry.stringLengthMin) {
     properties.push(['CO_stringLengthMin', String(entry.stringLengthMin)]);
   }
+  // display texts, same order as libEDSsharp: texts by key (ordinal), meta address, export, multiplier
+  for (const key of Object.keys(entry.texts).sort(ordinal)) {
+    if (entry.texts[key]) {
+      properties.push([TEXT_PROPERTY_PREFIX + key, entry.texts[key]]);
+    }
+  }
+  if (entry.metaRef) {
+    properties.push(['CO_metaRef', entry.metaRef]);
+  }
+  if (entry.textExport.length) {
+    properties.push(['CO_textExport', entry.textExport.join(',')]);
+  }
+  if (entry.multiplier) {
+    properties.push(['CO_multiplier', entry.multiplier]);
+  }
   const pad = '  '.repeat(level);
-  return properties.map(([name, value]) => `${pad}<q1:property name="${esc(name)}" value="${esc(value)}" />`);
+  return properties.map(([name, value]) => `${pad}<q1:property name="${escAttr(name)}" value="${escAttr(value)}" />`);
+}
+
+const TEXT_PROPERTY_PREFIX = 'CO_text:';
+
+function ordinal(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function characteristicLines(name: string, contents: string[]): string[] {
+  return [
+    '            <q1:characteristic>',
+    '              <q1:characteristicName>',
+    `                <label lang="en">${esc(name)}</label>`,
+    '              </q1:characteristicName>',
+    ...contents.flatMap((content) => [
+      '              <q1:characteristicContent>',
+      `                <label lang="en">${esc(content)}</label>`,
+      '              </q1:characteristicContent>',
+    ]),
+    '            </q1:characteristic>',
+  ];
+}
+
+/** Project wide text settings as characteristics, as written by libEDSsharp. */
+function textInfoLines(info: TextInfo): string[] {
+  if (isTextInfoEmpty(info)) {
+    return [];
+  }
+  const lines: string[] = [];
+  if (info.metaProject) {
+    lines.push(...characteristicLines('CO_metaProject', ['true']));
+  }
+  if (info.metaSource) {
+    lines.push(...characteristicLines('CO_metaSource', [info.metaSource]));
+  }
+  if (info.languages.length) {
+    lines.push(...characteristicLines('CO_textLanguages', info.languages));
+  }
+  if (info.fallbackLanguage) {
+    lines.push(...characteristicLines('CO_textFallbackLanguage', [info.fallbackLanguage]));
+  }
+  const lengths = Object.keys(info.maxLength).sort(ordinal);
+  if (lengths.length) {
+    lines.push(...characteristicLines('CO_textMaxLength', lengths.map((kind) => `${kind}=${info.maxLength[kind]}`)));
+  }
+  return lines;
+}
+
+function readTextInfo(body: Element): TextInfo {
+  const info: TextInfo = { languages: [], fallbackLanguage: '', maxLength: {}, metaProject: false, metaSource: '' };
+  for (const characteristic of allElements(body, 'characteristic')) {
+    const nameElement = child(characteristic, 'characteristicName');
+    const name = nameElement ? directText(nameElement, 'label') : '';
+    const contents = children(characteristic, 'characteristicContent')
+      .map((content) => directText(content, 'label'))
+      .filter((content) => content);
+    switch (name) {
+      case 'CO_textLanguages':
+        info.languages = contents;
+        break;
+      case 'CO_textFallbackLanguage':
+        info.fallbackLanguage = contents[0] ?? '';
+        break;
+      case 'CO_textMaxLength':
+        for (const content of contents) {
+          const match = /^\s*([^=]+?)\s*=\s*(\d+)\s*$/.exec(content);
+          if (match) {
+            info.maxLength[match[1]] = Number(match[2]);
+          }
+        }
+        break;
+      case 'CO_metaProject':
+        info.metaProject = contents[0] === 'true';
+        break;
+      case 'CO_metaSource':
+        info.metaSource = contents[0] ?? '';
+        break;
+      default:
+        break;
+    }
+  }
+  return info;
 }
 
 function accessAttribute(entry: OdEntry, parent: OdEntry | null, complex: boolean): string {
@@ -981,6 +1087,11 @@ function esc(value: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/** Escapes an attribute value; line breaks and tabs are kept (XML would turn them into spaces). */
+function escAttr(value: string): string {
+  return esc(value).replace(/\n/g, '&#xA;').replace(/\r/g, '&#xD;').replace(/\t/g, '&#x9;');
 }
 
 export function blankBaudRates(): BaudRates {

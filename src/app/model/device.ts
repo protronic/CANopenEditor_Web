@@ -98,7 +98,29 @@ export interface OdEntry {
   flagsPdo: boolean;
   accessSrdo: SrdoAccess;
   stringLengthMin: number;
+  /** Display texts (meta texts), key "<kind>:<language>", e.g. "label:de"; see docs/meta-texts.md in CANopenEditor. */
+  texts: Record<string, string>;
+  /** Address of the meta entry whose texts apply instead, e.g. "0x1400" or "0x1400:01"; empty: own address. */
+  metaRef: string;
+  /** Text kinds exported into firmware although not exported by default, e.g. "tooltip". */
+  textExport: string[];
+  /** Multiplier from the raw value to the displayed value, e.g. "0.1"; empty: 1. */
+  multiplier: string;
   subObjects: OdEntry[];
+}
+
+/** Project wide settings of the display texts. */
+export interface TextInfo {
+  /** Languages in display order, e.g. ["de", "en"]. */
+  languages: string[];
+  /** Language used where a text is missing. */
+  fallbackLanguage: string;
+  /** Maximum length in characters per text kind, used for warnings. */
+  maxLength: Record<string, number>;
+  /** True if the file is a meta project: it holds the texts for another object dictionary. */
+  metaProject: boolean;
+  /** File name of the object dictionary of a meta project. */
+  metaSource: string;
 }
 
 export interface DeviceDocument {
@@ -134,6 +156,7 @@ export interface DeviceDocument {
   groupMessaging: boolean;
   dynamicChannels: boolean;
   dummy: boolean[];
+  textInfo: TextInfo;
   objects: OdEntry[];
 }
 
@@ -251,6 +274,15 @@ export function emptyBaudRates(): BaudRates {
   };
 }
 
+export function emptyTextInfo(): TextInfo {
+  return { languages: [], fallbackLanguage: '', maxLength: {}, metaProject: false, metaSource: '' };
+}
+
+export function isTextInfoEmpty(info: TextInfo): boolean {
+  return info.languages.length === 0 && !info.fallbackLanguage && Object.keys(info.maxLength).length === 0
+    && !info.metaProject && !info.metaSource;
+}
+
 export function createEmptyDocument(): DeviceDocument {
   return {
     schemaVersion: '1.1',
@@ -285,6 +317,7 @@ export function createEmptyDocument(): DeviceDocument {
     groupMessaging: false,
     dynamicChannels: false,
     dummy: [false, false, false, false, false, false, false],
+    textInfo: emptyTextInfo(),
     objects: [],
   };
 }
@@ -310,6 +343,10 @@ export function createEntry(partial: Partial<OdEntry> & Pick<OdEntry, 'index' | 
     flagsPdo: partial.flagsPdo ?? false,
     accessSrdo: partial.accessSrdo ?? 'no',
     stringLengthMin: partial.stringLengthMin ?? 0,
+    texts: partial.texts ?? {},
+    metaRef: partial.metaRef ?? '',
+    textExport: partial.textExport ?? [],
+    multiplier: partial.multiplier ?? '',
     subObjects: partial.subObjects ?? [],
   };
 }

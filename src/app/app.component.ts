@@ -2,14 +2,16 @@ import { Component, computed, signal, OnInit, OnDestroy, effect, HostListener } 
 import { DeviceInfoComponent } from './device-info.component';
 import { DialogHostComponent } from './dialog-host.component';
 import { InsertProfileComponent } from './insert-profile.component';
+import { MetaEditorComponent } from './meta-editor.component';
 import { ObjectDictionaryComponent } from './object-dictionary.component';
 import { PdoViewComponent } from './pdo-view.component';
 import { DialogService } from './state/dialog.service';
 import { OpenDevice, ProjectStore } from './state/project.store';
 import { ConverterService, LoadConvertedFileEvent, ExportFileEvent } from './services/converter.service';
 import { Subscription } from 'rxjs';
+import { writeXdd } from './xdd/xdd-codec';
 
-type EditorTab = 'info' | 'od' | 'rx' | 'tx';
+type EditorTab = 'info' | 'od' | 'rx' | 'tx' | 'meta';
 
 interface SaveFileHandle {
   readonly name: string;
@@ -26,7 +28,7 @@ type SaveFilePickerWindow = Window & {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [DialogHostComponent, DeviceInfoComponent, InsertProfileComponent, ObjectDictionaryComponent, PdoViewComponent],
+  imports: [DialogHostComponent, DeviceInfoComponent, InsertProfileComponent, MetaEditorComponent, ObjectDictionaryComponent, PdoViewComponent],
   template: `
     <div class="shell">
       @if (!converter.isElectron) {
@@ -54,10 +56,16 @@ type SaveFilePickerWindow = Window & {
       <div class="workspace">
         <aside>
           <h2>Devices</h2>
-          @for (device of store.devices(); track device.id) {
-            <div class="device" [class.active]="device.id === store.selectedId()" [class.dirty]="device.dirty" (click)="store.select(device.id)">
+          @for (row of deviceRows(); track row.device.id) {
+            @let device = row.device;
+            <div class="device" [class.active]="device.id === store.selectedId()" [class.dirty]="device.dirty" [class.child]="row.child"
+                 (click)="store.select(device.id)">
               <div>
-                <strong>{{ device.document.productName || 'Unnamed' }}</strong>
+                @if (row.child) {
+                  <strong>↳ Display texts</strong>
+                } @else {
+                  <strong>{{ device.document.productName || 'Unnamed' }}@if (device.document.textInfo.metaProject) { <span class="meta-badge">texts</span> }</strong>
+                }
                 <small>{{ device.fileName }}{{ device.dirty ? ' · modified' : '' }}</small>
               </div>
               <button type="button" (click)="close(device, $event)" aria-label="Close file">×</button>
@@ -71,10 +79,13 @@ type SaveFilePickerWindow = Window & {
           @if (store.selected(); as device) {
             <div class="main-head">
               <div class="tabs">
-                <button type="button" [class.active]="tab() === 'info'" (click)="setTab('info')">Device Info</button>
-                <button type="button" [class.active]="tab() === 'od'" (click)="setTab('od')">Object Dictionary</button>
-                <button type="button" [class.active]="tab() === 'tx'" (click)="setTab('tx')">TX PDO Mapping</button>
-                <button type="button" [class.active]="tab() === 'rx'" (click)="setTab('rx')">RX PDO Mapping</button>
+                @if (!device.document.textInfo.metaProject) {
+                  <button type="button" [class.active]="tab() === 'info'" (click)="setTab('info')">Device Info</button>
+                  <button type="button" [class.active]="tab() === 'od'" (click)="setTab('od')">Object Dictionary</button>
+                  <button type="button" [class.active]="tab() === 'tx'" (click)="setTab('tx')">TX PDO Mapping</button>
+                  <button type="button" [class.active]="tab() === 'rx'" (click)="setTab('rx')">RX PDO Mapping</button>
+                }
+                <button type="button" [class.active]="tab() === 'meta'" (click)="setTab('meta')">Display Texts</button>
               </div>
               <span class="schema">Opened as XDD {{ device.document.schemaVersion }}. Save writes XDD 1.1</span>
             </div>
@@ -82,13 +93,17 @@ type SaveFilePickerWindow = Window & {
               <app-device-info [document]="device.document" (changed)="store.touch(device.id)" />
             </div>
             <div class="pane" [hidden]="tab() !== 'od'">
-              <app-object-dictionary [document]="device.document" [revision]="device.revision" (changed)="store.touch(device.id)" />
+              <app-object-dictionary [document]="device.document" [revision]="device.revision" [metaDocument]="store.metaOf(device)?.document ?? null"
+                                     (changed)="store.touch(device.id)" (openMeta)="setTab('meta')" />
             </div>
             <div class="pane" [hidden]="tab() !== 'rx'">
               <app-pdo-view direction="rx" [document]="device.document" [revision]="device.revision" (changed)="store.touch(device.id)" />
             </div>
             <div class="pane" [hidden]="tab() !== 'tx'">
               <app-pdo-view direction="tx" [document]="device.document" [revision]="device.revision" (changed)="store.touch(device.id)" />
+            </div>
+            <div class="pane" [hidden]="tab() !== 'meta'">
+              <app-meta-editor [device]="device" [active]="tab() === 'meta'" (showOd)="showOd($event)" />
             </div>
           } @else {
             <section class="empty">
@@ -118,8 +133,40 @@ type SaveFilePickerWindow = Window & {
 export class AppComponent implements OnInit, OnDestroy {
   private readonly tabs = signal<Record<string, EditorTab>>({});
   readonly tab = computed<EditorTab>(() => {
-    const id = this.store.selectedId();
-    return (id && this.tabs()[id]) || 'info';
+    const device = this.store.selected();
+    if (!device) {
+      return 'info';
+    }
+    // A meta project only holds display texts: it has no object dictionary or PDO views of its own.
+    if (device.document.textInfo.metaProject) {
+      return 'meta';
+    }
+    return this.tabs()[device.id] || 'info';
+  });
+  /** Open files; a meta project is listed directly below its object dictionary. */
+  readonly deviceRows = computed(() => {
+    const devices = this.store.devices();
+    const rows: { device: OpenDevice; child: boolean }[] = [];
+    const placed = new Set<string>();
+    for (const device of devices) {
+      if (placed.has(device.id)) {
+        continue;
+      }
+      if (device.document.textInfo.metaProject) {
+        const od = this.store.odOf(device);
+        if (od && od !== device && this.store.metaOf(od) === device) {
+          continue; // listed below its object dictionary
+        }
+      }
+      rows.push({ device, child: false });
+      placed.add(device.id);
+      const meta = device.document.textInfo.metaProject ? null : this.store.metaOf(device);
+      if (meta && meta !== device && !placed.has(meta.id)) {
+        rows.push({ device: meta, child: true });
+        placed.add(meta.id);
+      }
+    }
+    return rows;
   });
   readonly profileOpen = signal(false);
   readonly dragActive = signal(false);
@@ -150,11 +197,18 @@ export class AppComponent implements OnInit, OnDestroy {
       }
       return null;
     };
+    // Object dictionary of the selected meta project, for the meta addresses in the C export (Electron)
+    (window as any).getMetaSourceXddContent = () => {
+      const device = this.store.selected();
+      const od = device && device.document.textInfo.metaProject ? this.store.odOf(device) : null;
+      return od && od !== device ? writeXdd(od.document) : null;
+    };
   }
 
   ngOnDestroy(): void {
     this.subscriptions.unsubscribe();
     (window as any).getCurrentXddContent = null;
+    (window as any).getMetaSourceXddContent = null;
   }
 
   private setupConverterEvents(): void {
@@ -217,6 +271,12 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Shows the object dictionary tab of a device (e.g. from "Used by" in the display texts). */
+  showOd(device: OpenDevice): void {
+    this.store.select(device.id);
+    this.setTab('od');
+  }
+
   setTab(tab: EditorTab): void {
     const id = this.store.selectedId();
     if (id) {
@@ -272,6 +332,26 @@ export class AppComponent implements OnInit, OnDestroy {
     } catch (error) {
       console.error('Error loading file:', error);
       void this.dialogs.error('The file could not be loaded.');
+      return;
+    }
+    await this.openMetaNextTo(filePath);
+  }
+
+  /** Opens "<name>_meta.xdd" next to an opened object dictionary, if it exists. */
+  private async openMetaNextTo(filePath: string): Promise<void> {
+    const od = this.store.selected();
+    if (!od || od.document.textInfo.metaProject || this.store.metaOf(od)) {
+      return;
+    }
+    const metaPath = filePath.replace(/(\.[^./\\]*)?$/, '_meta.xdd');
+    if (metaPath === filePath) {
+      return;
+    }
+    try {
+      const xml = await (window as any).electronAPI.readFile(metaPath);
+      this.store.openMetaXml(od.id, metaPath.split(/[\\/]/).pop() || 'meta.xdd', xml, metaPath);
+    } catch {
+      // no meta project next to the file
     }
   }
 
@@ -461,6 +541,16 @@ export class AppComponent implements OnInit, OnDestroy {
       this.store.openXml('demo_io.xdd', await response.text());
     } catch {
       void this.dialogs.error('The example XDD could not be loaded.');
+      return;
+    }
+    const od = this.store.selected();
+    try {
+      const response = await fetch('demo_io_meta.xdd');
+      if (od && response.ok) {
+        this.store.openMetaXml(od.id, 'demo_io_meta.xdd', await response.text(), null);
+      }
+    } catch {
+      // the example works without display texts
     }
   }
 }

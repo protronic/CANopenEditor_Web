@@ -2,11 +2,32 @@
 
 | | |
 |---|---|
-| **Stand** | Entwurf 3, 26.11.2026 |
+| **Stand** | Entwurf 3, 26.11.2026; Pakete 1–7 und 9 umgesetzt (siehe „Stand der Umsetzung“) |
 | **Betrifft** | `protronic/CANopenEditor_Web` (Oberfläche) und `protronic/CANopenEditor` (libEDSsharp, EDSSharp, C-Generator) |
-| **Noch nichts umgesetzt** | Dieses Dokument ist nur der Plan. Die getroffenen Entscheidungen stehen in Abschnitt 10. |
+| **Entscheidungen** | Abschnitt 10 |
 
 **Geändert gegenüber Entwurf 2:** Die Entscheidungen vom 26.11. sind eingearbeitet: drei Textarten (16 / 128 / unbegrenzt), Deutsch und Englisch mit Rückfall auf Deutsch, Einheiten und Wertetexte von Anfang an, LVGL 9, Umsetzung zuerst im Fork.
+
+## Stand der Umsetzung (26.11.2026)
+
+| Paket | Stand |
+|---|---|
+| 1 Formatbeschreibung | [`docs/meta-texts.md`](https://github.com/protronic/CANopenEditor/blob/main/docs/meta-texts.md) in CANopenEditor |
+| 2 Texte durch alle Modelle | CANopenEditor `ad60b07`: XDD 1.1, Protobuf/JSON, EDSsharp, GUI 2; Rundlauf- und Regressionstests |
+| 3–5 Web-Editor | Reiter „Display Texts“, Meta-Adresse im OD, gekoppelte Auswahl, Anlegen, Abgleich, Prüfungen |
+| 6–7 Generator | CANopenEditor `fa9b3a4`: Exporter `CanOpenNodeMeta`, `--odfile`, `--langs`, `--glyphs`; mit gcc übersetzt und zurückgelesen |
+| 8 Electron | C-Export eines Meta-Projekts erzeugt `meta.c`; braucht ein neues CANopenEditor-Release mit dem Exporter |
+| 9 Demo | CANopenEditor `87e5874`: `demo/meta/` mit LVGL-9-Hilfsdatei, gegen LVGL 9.2.2 geprüft |
+| 10 Upstream | offen |
+
+Abweichungen vom Plan:
+
+- **Multiplikator** ergänzt (`CO_multiplier`, z. B. `0.1`); `meta.c` liefert Multiplikator und Nachkommastellen.
+- **JSON:** Die Texte stehen in einem optionalen Objekt `meta` (`texts`, `metaRef`, `textExport`, `multiplier`) statt direkt am Objekt. So bleiben JSON-Dateien ohne Texte unverändert und für ältere Programme lesbar.
+- **Speichern:** Das Meta-Projekt steht in der Geräteliste eingerückt unter seinem OD („↳ Display texts“) und wird wie jede Datei einzeln gespeichert. Es hat nur den Reiter „Display Texts“, nicht die OD- und PDO-Reiter.
+- **Verwaiste Einträge** (nicht mehr im OD) lassen sich im Meta-Editor mit „Remove entry“ löschen.
+- **Subindex 0** („Highest sub-index supported“) wird beim Anlegen nicht mit Texten vorbelegt, damit er keinen Flash belegt.
+- **Wertetexte** im C-Code zusätzlich als Liste abrufbar (`meta_value_count`, `meta_value_at`), z. B. für Auswahllisten.
 
 ---
 

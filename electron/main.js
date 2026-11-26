@@ -379,10 +379,15 @@ async function showExportDialog(format) {
     return;
   }
   
+  // A meta project (display texts) is exported to meta.c/meta.h by the exporter "CanOpenNodeMeta";
+  // its object dictionary, if open, provides the meta addresses (CO_metaRef).
+  const isMeta = format === 'c' && xddContent.includes('>CO_metaProject<');
+  const odContent = isMeta ? await mainWindow.webContents.executeJavaScript('window.getMetaSourceXddContent?.()') : null;
+
   const filters = getFiltersForFormat(format);
   const extensions = filters.length > 0 && filters[0].extensions ? filters[0].extensions.filter(e => e !== '*') : [];
   const defaultExt = extensions[0] || format;
-  const defaultFilename = format === 'c' ? 'OD.c' : 'device.' + defaultExt;
+  const defaultFilename = format === 'c' ? (isMeta ? 'meta.c' : 'OD.c') : 'device.' + defaultExt;
 
   // Use custom HTML file browser in save mode
   const targetPath = await showCustomFileBrowser({
@@ -404,7 +409,7 @@ async function showExportDialog(format) {
     const converterPath = getConverterPath();
     const tempDir = path.join(app.getPath('temp'), 'canopen-editor');
     const tempXddPath = path.join(tempDir, `temp_${Date.now()}.xdd`);
-    const args = getEdsSharpArgs(tempXddPath, targetPath, format, false);
+    const args = getEdsSharpArgs(tempXddPath, targetPath, format, false, isMeta, odContent ? path.join(tempDir, 'od.xdd') : null);
 
     const command = `${converterPath} ${args.join(' ')}`;
 
@@ -418,14 +423,14 @@ async function showExportDialog(format) {
     });
 
     if (response === 1) {
-      exportToFormat(xddContent, targetPath, format);
+      exportToFormat(xddContent, targetPath, format, isMeta, odContent);
     }
   } else {
-    exportToFormat(xddContent, targetPath, format);
+    exportToFormat(xddContent, targetPath, format, isMeta, odContent);
   }
 }
 
-function exportToFormat(xddContent, targetPath, format) {
+function exportToFormat(xddContent, targetPath, format, isMeta = false, odContent = null) {
   if (!mainWindow) return;
   const converterPath = getConverterPath();
   if (!converterPath || !fs.existsSync(converterPath)) {
@@ -438,11 +443,18 @@ function exportToFormat(xddContent, targetPath, format) {
   }
   const tempXddPath = path.join(tempDir, `temp_${Date.now()}.xdd`);
   fs.writeFileSync(tempXddPath, xddContent, 'utf-8');
+  const tempOdPath = odContent ? path.join(tempDir, `od_${Date.now()}.xdd`) : null;
+  if (tempOdPath) {
+    fs.writeFileSync(tempOdPath, odContent, 'utf-8');
+  }
   
-  const args = getEdsSharpArgs(tempXddPath, targetPath, format, false);
+  const args = getEdsSharpArgs(tempXddPath, targetPath, format, false, isMeta, tempOdPath);
   
   execFile(converterPath, args, (error, stdout, stderr) => {
     try { fs.unlinkSync(tempXddPath); } catch (e) {}
+    if (tempOdPath) {
+      try { fs.unlinkSync(tempOdPath); } catch (e) {}
+    }
     if (error) {
       console.error('Export error:', stderr);
       dialog.showMessageBoxSync(mainWindow, { type: 'error', title: 'Export Error', message: stderr.toString() || error.message });
@@ -497,7 +509,7 @@ function getFiltersForFormat(format) {
 }
 
 // Build EDSSharp arguments based on conversion type and format
-function getEdsSharpArgs(inputPath, outputPath, format, isImport) {
+function getEdsSharpArgs(inputPath, outputPath, format, isImport, isMeta = false, odPath = null) {
   let args;
   let type;
 
@@ -514,11 +526,14 @@ function getEdsSharpArgs(inputPath, outputPath, format, isImport) {
     } else if (format == 'xdc') {
       type = 'CanOpenXDCv1.1';
     } else if (format == 'c') {
-      type = 'CanOpenNodeV4';
+      type = isMeta ? 'CanOpenNodeMeta' : 'CanOpenNodeV4';
     } else if (format == 'json') {
       type = 'CanOpenNodeProtobuf(json)';
     }
     args = ['--infile', inputPath, '--outfile', outputPath, '--type', type];
+    if (isMeta && odPath) {
+      args.push('--odfile', odPath);
+    }
   }
   
   return args;

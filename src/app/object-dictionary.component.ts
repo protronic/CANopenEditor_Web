@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, effect, inject, input, output, untracked } from '@angular/core';
+import { ChangeDetectorRef, Component, ElementRef, HostListener, effect, inject, input, output, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   AccessType,
@@ -35,6 +35,8 @@ import {
 } from './xdd/pdo';
 import { DraggableDirective } from './draggable.directive';
 import { UnsavedEditsService } from './state/unsaved-edits.service';
+import { MetaLinkService } from './state/meta-link.service';
+import { displayText, entryAt, fallbackOf, formatMetaAddress, metaAddressIn, parseMetaAddress, ownAddress } from './xdd/meta';
 import { ViewStateService } from './state/view-state.service';
 
 type PendingChoice = 'yes' | 'no' | 'cancel';
@@ -153,6 +155,15 @@ interface OdViewState {
             <span>Denotation</span>
             <input class="peach" [ngModel]="draftDenotation" (ngModelChange)="setDraft('denotation', $event)" [disabled]="!editing()" />
           </label>
+          <div class="od-name-row">
+            <label class="od-line" title="Meta entry whose display texts apply, e.g. 0x1400 or 0x1400:01. Empty: own address.">
+              <span>Meta address</span>
+              <input [ngModel]="draftMetaRef" (ngModelChange)="setDraft('metaRef', $event)" [disabled]="!editing()"
+                     [placeholder]="metaPlaceholder()" [class.invalid]="!metaRefValid()" />
+            </label>
+            <span class="meta-preview" [class.missing]="metaPreview().missing">{{ metaPreview().text }}</span>
+            <button type="button" class="system standard-size" (click)="openMeta.emit()" [disabled]="!editing()">Texts...</button>
+          </div>
           <label class="od-line od-description">
             <span>Description</span>
             <textarea [ngModel]="draftDescription" (ngModelChange)="setDraft('description', $event)" [disabled]="!editing()"></textarea>
@@ -270,6 +281,7 @@ interface OdViewState {
           <button type="button" (click)="cloneDialog()" [disabled]="selectedIndex == null">Clone...</button>
           <button type="button" (click)="deleteSelected()" [disabled]="selectedIndex == null">Delete...</button>
           <button type="button" (click)="toggleSelected()" [disabled]="selectedIndex == null">Toggle</button>
+          <button type="button" (click)="setMetaAddressDialog()" [disabled]="selectedIndex == null">Meta address...</button>
         } @else {
           <button type="button" (click)="addSub()" [disabled]="!canAddSub">Add</button>
           <button type="button" (click)="removeSub(true)" [disabled]="!canRemoveSub">Remove (shift up)</button>
@@ -328,7 +340,11 @@ interface OdViewState {
 export class ObjectDictionaryComponent {
   readonly document = input.required<DeviceDocument>();
   readonly revision = input(0);
+  /** Meta project with the display texts of this object dictionary, for the preview of the meta address. */
+  readonly metaDocument = input<DeviceDocument | null>(null);
   readonly changed = output<void>();
+  /** Asks the app to show the display texts (meta tab). */
+  readonly openMeta = output<void>();
 
   readonly groups = [
     { id: 'communication', title: 'Communication Specific Parameters' },
@@ -378,10 +394,14 @@ export class ObjectDictionaryComponent {
   draftStorage = 'RAM';
   draftDisabled = false;
   draftFlags = false;
+  draftMetaRef = '';
 
   private readonly dialogs = inject(DialogService);
   private readonly unsaved = inject(UnsavedEditsService);
   private readonly viewState = inject(ViewStateService);
+  private readonly metaLink = inject(MetaLinkService);
+  private readonly changeDetector = inject(ChangeDetectorRef);
+  private handledRequest = 0;
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private extraCounts: string[] = [];
   private extraStorage: string[] = [];
@@ -414,6 +434,102 @@ export class ObjectDictionaryComponent {
         }
       });
     });
+
+    // Selection requested by the meta editor ("Used by", or following its selection)
+    effect(() => {
+      const request = this.metaLink.odRequest();
+      const document = this.document();
+      untracked(() => {
+        if (request && request.document === document && request.nonce !== this.handledRequest) {
+          this.handledRequest = request.nonce;
+          void this.selectRequested(request.index, request.subIndex);
+        }
+      });
+    });
+  }
+
+  private async selectRequested(index: number, subIndex: number | null): Promise<void> {
+    const object = this.document().objects.find((entry) => entry.index === index);
+    if (!object) {
+      return;
+    }
+    // Without unapplied changes the selection changes at once, during the current change detection.
+    const asked = this.dirty;
+    if (asked && !(await this.guard())) {
+      return;
+    }
+    const group = this.groupOf(index) as ObjectGroupId;
+    if (this.collapsed[group]) {
+      this.collapsed = { ...this.collapsed, [group]: false };
+    }
+    this.extraSelection.clear();
+    this.selectedIndex = index;
+    this.selectedSubIndex = subIndex != null && object.subObjects.some((sub) => sub.subIndex === subIndex) ? subIndex : null;
+    this.loadDraft();
+    if (asked) {
+      this.changeDetector.detectChanges();
+    }
+    setTimeout(() => {
+      this.host.nativeElement.querySelectorAll('tr.selected').forEach((row) => row.scrollIntoView({ block: 'nearest' }));
+    });
+  }
+
+  metaRefValid(): boolean {
+    return !this.draftMetaRef.trim() || parseMetaAddress(this.draftMetaRef) != null;
+  }
+
+  metaPlaceholder(): string {
+    const parent = this.selected();
+    if (!parent) {
+      return '';
+    }
+    const sub = this.selectedSub();
+    return `own address (${formatMetaAddress(ownAddress(parent, sub))})`;
+  }
+
+  /** Meta entry and its label for the drafted meta address. */
+  metaPreview(): { text: string; missing: boolean } {
+    const parent = this.selected();
+    const meta = this.metaDocument();
+    if (!parent || !meta || !this.metaRefValid()) {
+      return { text: '', missing: false };
+    }
+    const sub = this.selectedSub();
+    const draftParent = sub ? parent : { ...parent, metaRef: this.draftMetaRef.trim() };
+    const draftSub = sub ? { ...sub, metaRef: this.draftMetaRef.trim() } : null;
+    const address = metaAddressIn(meta, draftParent, draftSub);
+    const entry = entryAt(meta, address);
+    if (!entry) {
+      return { text: `→ ${formatMetaAddress(address)} (not in meta project)`, missing: !!this.draftMetaRef.trim() };
+    }
+    const fallback = fallbackOf(meta);
+    const label = displayText(entry, 'label', fallback, fallback);
+    return { text: `→ ${formatMetaAddress(address)}${label ? ` "${label}"` : ''}`, missing: false };
+  }
+
+  /** Sets the meta address of all selected objects. */
+  async setMetaAddressDialog(): Promise<void> {
+    this.menu = null;
+    if (!(await this.guard())) {
+      return;
+    }
+    const objects = this.selectedObjects();
+    const value = await this.dialogs.prompt(
+      `Meta address for ${objects.length} selected object(s), e.g. 0x1400. Their sub entries use the same sub-index there. Empty: own address.`,
+      'Meta address',
+      objects[0]?.metaRef ?? '',
+    );
+    if (value == null) {
+      return;
+    }
+    const text = value.trim();
+    if (text && !parseMetaAddress(text)) {
+      void this.dialogs.warning(`"${text}" is not a meta address. Use e.g. 0x1400 or 0x1400:01.`);
+      return;
+    }
+    objects.forEach((object) => (object.metaRef = text));
+    this.loadDraft();
+    this.changed.emit();
   }
 
   private restoreView(document: DeviceDocument): void {
@@ -793,6 +909,7 @@ export class ObjectDictionaryComponent {
       case 'stringLen': this.draftStringLen = Number(value) || 0; break;
       case 'enabled': this.draftDisabled = !value; break;
       case 'flags': this.draftFlags = Boolean(value); break;
+      case 'metaRef': this.draftMetaRef = String(value); break;
       default: break;
     }
     this.applyDraft();
@@ -834,6 +951,10 @@ export class ObjectDictionaryComponent {
     const parent = this.selected();
     if (!entry || !parent || !this.dirty) {
       return true;
+    }
+    if (!this.metaRefValid()) {
+      void this.dialogs.warning(`"${this.draftMetaRef}" is not a meta address. Use e.g. 0x1400 or 0x1400:01, or leave it empty.`);
+      return false;
     }
     if (entry !== parent && entry.objectType === 'VAR') {
       const error = checkMappingObject(this.document(), parent, entry.subIndex, this.draftDefault);
@@ -1092,8 +1213,10 @@ export class ObjectDictionaryComponent {
       this.draftStorage = 'RAM';
       this.draftDisabled = false;
       this.draftFlags = false;
+      this.draftMetaRef = '';
       this.baseline = this.snapshot();
       this.reportUnsaved();
+      this.publishSelection();
       return;
     }
     this.draftName = entry.name;
@@ -1113,8 +1236,14 @@ export class ObjectDictionaryComponent {
     this.draftStorage = parent.storageGroup || 'RAM';
     this.draftDisabled = parent.disabled;
     this.draftFlags = parent.flagsPdo;
+    this.draftMetaRef = entry.metaRef;
     this.baseline = this.snapshot();
     this.reportUnsaved();
+    this.publishSelection();
+  }
+
+  private publishSelection(): void {
+    this.metaLink.setOdSelection(this.document(), { index: this.selectedIndex, subIndex: this.selectedSubIndex });
   }
 
   /** Draft edits change the object only when they are saved. */
@@ -1147,6 +1276,7 @@ export class ObjectDictionaryComponent {
     entry.name = this.draftName;
     entry.denotation = this.draftDenotation;
     entry.description = this.draftDescription;
+    entry.metaRef = parseMetaAddress(this.draftMetaRef) ? this.draftMetaRef.trim() : '';
     if (entry.objectType === 'VAR') {
       entry.dataType = this.draftDataType;
       entry.access = this.draftAccess;
@@ -1184,6 +1314,7 @@ export class ObjectDictionaryComponent {
       storage: this.draftStorage,
       disabled: this.draftDisabled,
       flags: this.draftFlags,
+      metaRef: this.draftMetaRef,
     });
   }
 

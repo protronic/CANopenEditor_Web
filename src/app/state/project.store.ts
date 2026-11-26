@@ -7,6 +7,7 @@ import { DialogService } from './dialog.service';
 import { InsertRow, buildInsertRows, insertSelected, profileUrl } from '../xdd/profiles';
 import { pdoSlots } from '../xdd/pdo';
 import { syncMonitoredNodes, trackHeartbeatConsumers } from '../xdd/heartbeat';
+import { CreateMetaOptions, createMetaProject } from '../xdd/meta';
 
 export interface OpenDevice {
   id: string;
@@ -31,6 +32,75 @@ export class ProjectStore {
   private readonly dialogs = inject(DialogService);
 
   readonly selected = computed(() => this.devices().find((device) => device.id === this.selectedId()) ?? null);
+  /** Object dictionary device id -> meta project device id, for meta projects created or opened for it. */
+  private readonly metaLinks = signal<Record<string, string>>({});
+
+  /**
+   * Meta project holding the display texts of a device: the device itself if it is a meta project,
+   * otherwise a linked open meta project or one whose CO_metaSource names the device's file.
+   */
+  metaOf(device: OpenDevice): OpenDevice | null {
+    if (device.document.textInfo.metaProject) {
+      return device;
+    }
+    const devices = this.devices();
+    const linked = this.metaLinks()[device.id];
+    const byLink = linked ? devices.find((entry) => entry.id === linked) : undefined;
+    if (byLink) {
+      return byLink;
+    }
+    const name = baseName(device.fileName);
+    return devices.find((entry) => entry !== device && entry.document.textInfo.metaProject
+      && baseName(entry.document.textInfo.metaSource) === name) ?? null;
+  }
+
+  /** Object dictionary a meta project belongs to, if it is open. */
+  odOf(meta: OpenDevice): OpenDevice | null {
+    if (!meta.document.textInfo.metaProject) {
+      return meta;
+    }
+    const devices = this.devices();
+    const linked = Object.entries(this.metaLinks()).find(([, metaId]) => metaId === meta.id)?.[0];
+    const byLink = linked ? devices.find((entry) => entry.id === linked) : undefined;
+    if (byLink) {
+      return byLink;
+    }
+    const name = baseName(meta.document.textInfo.metaSource);
+    return name ? devices.find((entry) => entry !== meta && !entry.document.textInfo.metaProject
+      && baseName(entry.fileName) === name) ?? null : null;
+  }
+
+  /** Creates the meta project of an object dictionary; the object dictionary stays selected. */
+  createMeta(odId: string, options: CreateMetaOptions): OpenDevice | null {
+    const od = this.devices().find((device) => device.id === odId);
+    if (!od) {
+      return null;
+    }
+    const document = createMetaProject(od.document, { ...options, sourceFileName: od.fileName });
+    const meta = this.create(document, document.fileName, true, null);
+    this.devices.update((list) => [...list, meta]);
+    this.metaLinks.update((links) => ({ ...links, [odId]: meta.id }));
+    return meta;
+  }
+
+  /** Links an opened meta project to an object dictionary. */
+  linkMeta(odId: string, metaId: string): void {
+    this.metaLinks.update((links) => ({ ...links, [odId]: metaId }));
+  }
+
+  /** Opens a meta project next to the object dictionary without selecting it. */
+  openMetaXml(odId: string, fileName: string, xml: string, filePath: string | null): string | null {
+    try {
+      const document = parseXdd(xml);
+      document.fileName = ensureXddName(fileName, document.productName);
+      const meta = this.create(document, document.fileName, false, filePath);
+      this.devices.update((list) => [...list, meta]);
+      this.linkMeta(odId, meta.id);
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : 'The XDD file could not be read.';
+    }
+  }
 
   select(id: string): void {
     this.selectedId.set(id);
@@ -115,6 +185,7 @@ export class ProjectStore {
   }
 
   close(id: string): void {
+    this.metaLinks.update((links) => Object.fromEntries(Object.entries(links).filter(([od, meta]) => od !== id && meta !== id)));
     const remaining = this.devices().filter((device) => device.id !== id);
     this.devices.set(remaining);
     if (this.selectedId() === id) {
@@ -170,4 +241,8 @@ export class ProjectStore {
 function countPdos(document: DeviceDocument): void {
   document.nrOfRxPdo = pdoSlots(document, 'rx').length;
   document.nrOfTxPdo = pdoSlots(document, 'tx').length;
+}
+
+function baseName(path: string): string {
+  return (path ?? '').replace(/^.*[\\/]/, '').toLowerCase();
 }

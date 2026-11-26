@@ -1012,3 +1012,33 @@ app-pdo-view {
   .object-settings .span-2, .save-row { grid-column: auto; }
   .info-layout, .info-split, .pdo-top, .comm-grid { grid-template-columns: 1fr; }
 }
+
+/* Display texts (meta address in the object dictionary, meta projects in the device list) */
+.od input.invalid { border-color: #d4503a; background: #fde4dc; }
+
+.meta-preview {
+  flex: 0 1 16rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.meta-preview.missing { color: #b8341c; }
+
+.meta-badge {
+  margin-left: 0.35rem;
+  padding: 0 0.3rem;
+  border-radius: 3px;
+  background: var(--teal);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.device.child { margin-left: 1rem; width: calc(100% - 1rem); }
+
+app-meta-editor { flex: 1; min-height: 0; display: flex; flex-direction: column; }
