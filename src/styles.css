@@ -1028,6 +1028,33 @@ app-pdo-view {
 
 .meta-preview.missing { color: #b8341c; }
 
+.meta-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin: -0.1rem 0 0.1rem 6.85rem;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.od button.meta-chip {
+  background: #eef5f4;
+  color: var(--ink);
+  border: 1px solid #b9d6d3;
+  border-radius: 999px;
+  padding: 0.05rem 0.55rem;
+  font-size: 0.76rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.od button.meta-chip:hover { background: #dcecea; }
+.od button.meta-chip code { font-family: var(--mono); color: var(--teal); }
+.od button.meta-chip em { color: var(--muted); margin-left: 0.3em; }
+
 .meta-badge {
   margin-left: 0.35rem;
   padding: 0 0.3rem;

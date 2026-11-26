@@ -20,6 +20,8 @@ dictionary saved as `<name>_meta.xdd`, and stored as `CO_text:*` properties in t
   the names. *Sync with OD* adds new objects later; texts are kept.
 - The field *Meta address* in the object dictionary lets several entries share texts, e.g. all RPDO
   communication parameters use the texts of 0x1400 (context menu *Meta address...* for several objects).
+  Below the field, meta entries with a similar name or label are offered (*Similar:*); while typing,
+  the field lists them first, followed by all entries with texts.
 - An open meta project is listed below its object dictionary as *Display texts*. It only has the
   *Display Texts* view; Save and Close apply to the selected file.
 - The entry view shows a preview in the selected language (with fallback), marks missing translations

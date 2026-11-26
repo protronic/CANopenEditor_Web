@@ -283,6 +283,131 @@ export function isValidMultiplier(text: string): boolean {
 }
 
 // ---------------------------------------------------------------------------------------------
+// suggestions for the meta address
+
+export interface MetaSuggestion {
+  /** Value for CO_metaRef, e.g. "0x1400" or "0x1400:01". */
+  ref: string;
+  address: MetaAddress;
+  /** Name of the meta entry (as in the object dictionary). */
+  name: string;
+  /** Label in the fallback language, if any. */
+  label: string;
+  /** 0..1, higher is more similar. */
+  score: number;
+}
+
+/** Lower case words without numbers: "RPDO communication parameter 2" -> "rpdo communication parameter". */
+export function normalizeName(text: string): string {
+  return (text ?? '')
+    .toLowerCase()
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\b\d+\b/g, ' ')
+    .replace(/([a-z])\d+\b/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function numbersOf(text: string): string {
+  return ((text ?? '').match(/\d+/g) ?? []).join(' ');
+}
+
+/** Similarity of two names: 1 for the same words (numbers ignored), else the mean of the Dice coefficients of letter pairs and of words. */
+export function nameSimilarity(a: string, b: string): number {
+  const x = normalizeName(a);
+  const y = normalizeName(b);
+  if (!x || !y) {
+    return 0;
+  }
+  if (x === y) {
+    return 1;
+  }
+  const pairs = (text: string) => {
+    const result = new Map<string, number>();
+    for (const word of text.split(' ')) {
+      const padded = ` ${word} `;
+      for (let i = 0; i < padded.length - 1; i++) {
+        const pair = padded.slice(i, i + 2);
+        result.set(pair, (result.get(pair) ?? 0) + 1);
+      }
+    }
+    return result;
+  };
+  const px = pairs(x);
+  const py = pairs(y);
+  let common = 0;
+  let total = 0;
+  for (const [pair, count] of px) {
+    common += Math.min(count, py.get(pair) ?? 0);
+    total += count;
+  }
+  for (const count of py.values()) {
+    total += count;
+  }
+  const letters = total ? (2 * common) / total : 0;
+  // whole words count as much as letter pairs, so "digital inputs" is not almost "digital outputs"
+  const wx = x.split(' ');
+  const wy = new Set(y.split(' '));
+  const words = (2 * wx.filter((word) => wy.has(word)).length) / (wx.length + wy.size);
+  return (letters + words) / 2;
+}
+
+/**
+ * Meta entries whose name or labels are similar to an object dictionary entry, as candidates for its meta address.
+ * For the object itself of an ARRAY/RECORD other objects are offered (their sub entries then use the same sub-index),
+ * for sub entries and VARs other sub entries and VARs. Entries of the same object and the own address are left out.
+ */
+export function suggestMetaAddresses(meta: DeviceDocument, object: OdEntry, sub: OdEntry | null, limit = 5): MetaSuggestion[] {
+  const entry = sub ?? object;
+  const wantObject = !sub && isComplex(object);
+  const fallback = fallbackOf(meta);
+  const result: MetaSuggestion[] = [];
+  for (const candidate of metaEntries(meta)) {
+    if (candidate.object.index === object.index) {
+      continue;
+    }
+    const target = candidate.sub ?? candidate.object;
+    const isObject = candidate.sub == null && isComplex(candidate.object);
+    if (isObject !== wantObject) {
+      continue;
+    }
+    const labels = Object.entries(target.texts)
+      .filter(([key]) => splitTextKey(key)?.kind === 'label')
+      .map(([, text]) => text);
+    let score = Math.max(nameSimilarity(entry.name, target.name), ...labels.map((label) => nameSimilarity(entry.name, label) * 0.95));
+    if (score < 0.5) {
+      continue;
+    }
+    if (wantObject) {
+      if (candidate.object.subObjects.length === object.subObjects.length) {
+        score += 0.05;
+      }
+    } else {
+      if (target.dataType === entry.dataType) {
+        score += 0.05;
+      }
+      if (sub && candidate.sub && candidate.sub.subIndex === sub.subIndex) {
+        score += 0.05;
+      }
+      if (numbersOf(entry.name) && numbersOf(entry.name) === numbersOf(target.name)) {
+        score += 0.03;
+      }
+    }
+    if (hasTexts(target)) {
+      score += 0.1;
+    }
+    // a reference to a VAR is written without sub-index, a sub entry with it
+    const address = candidate.address;
+    const ref = address.sub === 0 && !isComplex(candidate.object) ? formatMetaAddress({ index: address.index, sub: null }) : formatMetaAddress(address);
+    result.push({ ref, address, name: target.name, label: getText(target, 'label', fallback), score: Math.min(1, score) });
+  }
+  return result
+    .sort((a, b) => b.score - a.score || a.address.index - b.address.index || (a.address.sub ?? -1) - (b.address.sub ?? -1))
+    .slice(0, limit);
+}
+
+// ---------------------------------------------------------------------------------------------
 // meta project
 
 export interface CreateMetaOptions {

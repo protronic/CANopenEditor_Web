@@ -36,7 +36,18 @@ import {
 import { DraggableDirective } from './draggable.directive';
 import { UnsavedEditsService } from './state/unsaved-edits.service';
 import { MetaLinkService } from './state/meta-link.service';
-import { displayText, entryAt, fallbackOf, formatMetaAddress, metaAddressIn, parseMetaAddress, ownAddress } from './xdd/meta';
+import {
+  MetaSuggestion,
+  displayText,
+  entryAt,
+  fallbackOf,
+  formatMetaAddress,
+  metaAddressIn,
+  metaEntries,
+  ownAddress,
+  parseMetaAddress,
+  suggestMetaAddresses,
+} from './xdd/meta';
 import { ViewStateService } from './state/view-state.service';
 
 type PendingChoice = 'yes' | 'no' | 'cancel';
@@ -159,11 +170,27 @@ interface OdViewState {
             <label class="od-line" title="Meta entry whose display texts apply, e.g. 0x1400 or 0x1400:01. Empty: own address.">
               <span>Meta address</span>
               <input [ngModel]="draftMetaRef" (ngModelChange)="setDraft('metaRef', $event)" [disabled]="!editing()"
-                     [placeholder]="metaPlaceholder()" [class.invalid]="!metaRefValid()" />
+                     [placeholder]="metaPlaceholder()" [class.invalid]="!metaRefValid()" list="od-meta-address-options" />
             </label>
             <span class="meta-preview" [class.missing]="metaPreview().missing">{{ metaPreview().text }}</span>
             <button type="button" class="system standard-size" (click)="openMeta.emit()" [disabled]="!editing()">Texts...</button>
           </div>
+          <datalist id="od-meta-address-options">
+            @for (option of metaOptions(); track option.ref) {
+              <option [value]="option.ref">{{ option.text }}</option>
+            }
+          </datalist>
+          @if (shownSuggestions().length) {
+            <div class="meta-suggestions">
+              <span>Similar:</span>
+              @for (suggestion of shownSuggestions(); track suggestion.ref) {
+                <button type="button" class="meta-chip" (click)="useSuggestion(suggestion)"
+                        [title]="'Use the texts of ' + suggestion.ref + ' (' + similarityText(suggestion) + ')'">
+                  <code>{{ suggestion.ref }}</code> {{ suggestion.name }}@if (suggestion.label && suggestion.label !== suggestion.name) {<em>&ldquo;{{ suggestion.label }}&rdquo;</em>}
+                </button>
+              }
+            </div>
+          }
           <label class="od-line od-description">
             <span>Description</span>
             <textarea [ngModel]="draftDescription" (ngModelChange)="setDraft('description', $event)" [disabled]="!editing()"></textarea>
@@ -507,6 +534,69 @@ export class ObjectDictionaryComponent {
     return { text: `→ ${formatMetaAddress(address)}${label ? ` "${label}"` : ''}`, missing: false };
   }
 
+  private suggestionCache: { key: string; meta: DeviceDocument | null; value: MetaSuggestion[] } = { key: '', meta: null, value: [] };
+
+  /** Meta entries with a similar name or label as the edited entry, as candidates for its meta address. */
+  metaSuggestions(): MetaSuggestion[] {
+    const meta = this.metaDocument();
+    const parent = this.selected();
+    if (!meta || !parent) {
+      return [];
+    }
+    const sub = this.selectedSub();
+    const key = `${this.revision()}|${parent.index}|${sub?.subIndex ?? ''}|${this.draftName}`;
+    if (this.suggestionCache.key !== key || this.suggestionCache.meta !== meta) {
+      const entry = sub ? { ...sub, name: this.draftName } : { ...parent, name: this.draftName };
+      this.suggestionCache = {
+        key,
+        meta,
+        value: suggestMetaAddresses(meta, sub ? parent : entry, sub ? entry : null),
+      };
+    }
+    return this.suggestionCache.value;
+  }
+
+  /** Suggestions shown below the field: not while the draft already names one of them. */
+  shownSuggestions(): MetaSuggestion[] {
+    if (!this.editing()) {
+      return [];
+    }
+    const draft = parseMetaAddress(this.draftMetaRef);
+    return this.metaSuggestions()
+      .filter((suggestion) => !draft || formatMetaAddress(draft) !== formatMetaAddress(parseMetaAddress(suggestion.ref)!))
+      .slice(0, 3);
+  }
+
+  /** Options of the input field: the suggestions first, then all meta entries with texts. */
+  metaOptions(): { ref: string; text: string }[] {
+    const meta = this.metaDocument();
+    if (!meta || !this.editing()) {
+      return [];
+    }
+    const options = this.metaSuggestions().map((suggestion) => ({ ref: suggestion.ref, text: `${suggestion.name} (similar)` }));
+    const seen = new Set(options.map((option) => option.ref));
+    const fallback = fallbackOf(meta);
+    for (const { address, object, sub } of metaEntries(meta)) {
+      const target = sub ?? object;
+      const ref = address.sub === 0 && !sub ? formatMetaAddress({ index: address.index, sub: null }) : formatMetaAddress(address);
+      if (seen.has(ref) || Object.keys(target.texts).length === 0 || options.length >= 400) {
+        continue;
+      }
+      seen.add(ref);
+      const label = displayText(target, 'label', fallback, fallback);
+      options.push({ ref, text: label && label !== target.name ? `${target.name} – ${label}` : target.name });
+    }
+    return options;
+  }
+
+  similarityText(suggestion: MetaSuggestion): string {
+    return suggestion.score >= 0.99 ? 'same name' : `similar name, ${Math.round(suggestion.score * 100)} %`;
+  }
+
+  useSuggestion(suggestion: MetaSuggestion): void {
+    this.setDraft('metaRef', suggestion.ref);
+  }
+
   /** Sets the meta address of all selected objects. */
   async setMetaAddressDialog(): Promise<void> {
     this.menu = null;
@@ -514,10 +604,15 @@ export class ObjectDictionaryComponent {
       return;
     }
     const objects = this.selectedObjects();
+    const meta = this.metaDocument();
+    const best = !objects[0]?.metaRef && meta ? suggestMetaAddresses(meta, objects[0], null, 1)[0] : undefined;
     const value = await this.dialogs.prompt(
-      `Meta address for ${objects.length} selected object(s), e.g. 0x1400. Their sub entries use the same sub-index there. Empty: own address.`,
+      best
+        ? { text: `Meta address for ${objects.length} selected object(s), e.g. 0x1400. Their sub entries use the same sub-index there. Empty: own address.`,
+            footer: `Suggested: ${best.ref} ${best.name} (${this.similarityText(best)})` }
+        : `Meta address for ${objects.length} selected object(s), e.g. 0x1400. Their sub entries use the same sub-index there. Empty: own address.`,
       'Meta address',
-      objects[0]?.metaRef ?? '',
+      objects[0]?.metaRef || best?.ref || '',
     );
     if (value == null) {
       return;

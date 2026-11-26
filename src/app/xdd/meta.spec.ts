@@ -7,11 +7,13 @@ import {
   formatMetaAddress,
   metaAddressIn,
   metaEntries,
+  nameSimilarity,
   parseMetaAddress,
   parseValue,
   removeMetaEntry,
   resolveMetaAddress,
   setValueTexts,
+  suggestMetaAddresses,
   syncWithOd,
   usedBy,
   valueTexts,
@@ -379,3 +381,45 @@ describe('value texts', () => {
     expect(parseValue('1.5')).toBeNull();
   });
 });
+
+describe('meta address suggestions', () => {
+  function project(): ReturnType<typeof createEmptyDocument> {
+    const meta = od();
+    for (const { object, sub } of metaEntries(meta)) {
+      (sub ?? object).metaRef = '';
+    }
+    findObject(meta, 0x2100)!.texts['label:de'] = 'Kesseltemp.';
+    return meta;
+  }
+
+  it('compares names without numbers and case', () => {
+    expect(nameSimilarity('RPDO communication parameter', 'RPDO Communication Parameter 2')).toBe(1);
+    expect(nameSimilarity('Temperature 2', 'Temperature')).toBe(1);
+    expect(nameSimilarity('Boiler temperature', 'Temperature')).toBeGreaterThan(0.5);
+    expect(nameSimilarity('Device name', 'Error register')).toBeLessThan(0.3);
+  });
+
+  it('offers objects for an object and sub entries for a sub entry', () => {
+    const meta = project();
+    const source = od();
+    const rpdo2 = findObject(source, 0x1401)!;
+    expect(suggestMetaAddresses(meta, rpdo2, null).map((s) => s.ref)).toEqual(['0x1400']);
+    expect(suggestMetaAddresses(meta, rpdo2, rpdo2.subObjects[1])[0].ref).toBe('0x1400:01');
+  });
+
+  it('offers a VAR with a similar name, without sub-index, best match first', () => {
+    const meta = project();
+    const temp2 = createEntry({ index: 0x2105, name: 'Temperature 2', dataType: 'UNSIGNED32' });
+    const suggestions = suggestMetaAddresses(meta, temp2, null);
+    expect(suggestions[0]).toMatchObject({ ref: '0x2100', name: 'Temperature', label: 'Kesseltemp.' });
+    expect(suggestions.map((s) => s.ref)).toContain('0x2101');
+  });
+
+  it('leaves out entries of the same object and unrelated names', () => {
+    const meta = project();
+    const inputs = findObject(od(), 0x2110)!;
+    expect(suggestMetaAddresses(meta, inputs, inputs.subObjects[2]).map((s) => s.ref)).not.toContain('0x2110:01');
+    expect(suggestMetaAddresses(meta, createEntry({ index: 0x2200, name: 'Operating mode' }), null)).toEqual([]);
+  });
+});
+
