@@ -17,16 +17,18 @@ jobs:
             core.exportVariable('JWT', token);
       - name: Exchange for an Anthropic access token
         run: |
-          set -o pipefail
-          curl -sS --fail-with-body https://api.anthropic.com/v1/oauth/token \
-            -H "content-type: application/json" \
-            --data @- <<JSON | jq 'with_entries(if (.key | test("token$")) then .value = "<redacted>" else . end)'
-          {
-            "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
-            "assertion": "$JWT",
-            "federation_rule_id": "fdrl_011r9vzwchf5UWx4eYreoKWY",
-            "organization_id": "47126995-4ba9-45e4-8754-e56f5d39cecd",
-            "service_account_id": "svac_01ERAEQwvkJruXFeVyMEL31Y",
-            "workspace_id": "wrkspc_01AeNgXznCv6sTFRiLQbgBLJ"
-          }
-          JSON
+          body=$(jq -n --arg a "$JWT" '{
+            grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+            assertion: $a,
+            federation_rule_id: "fdrl_011r9vzwchf5UWx4eYreoKWY",
+            organization_id: "47126995-4ba9-45e4-8754-e56f5d39cecd",
+            service_account_id: "svac_01ERAEQwvkJruXFeVyMEL31Y",
+            workspace_id: "wrkspc_01AeNgXznCv6sTFRiLQbgBLJ"
+          }')
+          code=$(curl -sS -o resp.json -w '%{http_code}' https://api.anthropic.com/v1/oauth/token \
+            -H "content-type: application/json" --data "$body")
+          red=$(jq -c 'with_entries(if (.key | test("token$")) then .value = "<redacted>" else . end)' resp.json 2>/dev/null || head -c 500 resp.json)
+          # Claims ohne Signatur ausgeben (keine Geheimnisse), zur Fehlersuche
+          claims=$(echo "$JWT" | cut -d. -f2 | tr '_-' '/+' | base64 -d 2>/dev/null | jq -c '{sub,repository,repository_owner,repository_owner_id,ref,event_name,aud,iss}' 2>/dev/null)
+          echo "::notice title=claims::$claims"
+          if [ "$code" = "200" ]; then echo "::notice title=OK HTTP $code::$red"; else echo "::error title=HTTP $code::$red"; exit 1; fi
