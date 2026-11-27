@@ -1,0 +1,69 @@
+name: Claude Code
+
+# Claude arbeitet Issues und PR-Kommentare ab, sobald jemand mit Schreibrechten
+# "@claude" schreibt (Kommentar, Review-Kommentar oder Titel/Text eines neuen Issues).
+# Ergebnis: Kommentar im Issue/PR, Code-Aenderungen auf einem eigenen Branch "claude/...".
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  issues:
+    types: [opened]
+
+concurrency:
+  group: claude-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  claude:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Abhaengigkeiten installieren
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: npm install --no-audit --no-fund
+
+      # Einige Specs lesen Referenzdateien aus dem .NET-Repo ueber ../Tests und
+      # ../EDSEditorGUI (lokal liegt CANopenEditor_Web neben bzw. in CANopenEditor).
+      - name: Referenzdaten aus protronic/CANopenEditor bereitstellen
+        run: |
+          git clone --depth 1 https://github.com/protronic/CANopenEditor "$RUNNER_TEMP/CANopenEditor"
+          ln -sfn "$RUNNER_TEMP/CANopenEditor/Tests" ../Tests
+          ln -sfn "$RUNNER_TEMP/CANopenEditor/EDSEditorGUI" ../EDSEditorGUI
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          # Workload Identity Federation (kein API-Key-Secret noetig). Die IDs sind
+          # Kennungen, keine Zugangsdaten; die Regel in der Claude Console prueft
+          # das GitHub-OIDC-Token (Org protronic).
+          anthropic_federation_rule_id: fdrl_011r9vzwchf5UWx4eYreoKWY
+          anthropic_organization_id: 47126995-4ba9-45e4-8754-e56f5d39cecd
+          anthropic_service_account_id: svac_01ERAEQwvkJruXFeVyMEL31Y
+          anthropic_workspace_id: wrkspc_01AeNgXznCv6sTFRiLQbgBLJ
+          claude_args: |
+            --max-turns 40
+            --allowedTools "Bash(npm test),Bash(npm run build),Bash(npm install),Bash(npx vitest *),Bash(npx ng build *),Bash(npx tsc *)"
