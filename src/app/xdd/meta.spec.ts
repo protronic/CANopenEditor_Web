@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createEmptyDocument, createEntry, findObject } from '../model/device';
+import { createEmptyDocument, createEntry, ensureXddName, findObject, isUiFileName } from '../model/device';
 import {
   checkMeta,
   createMetaProject,
@@ -312,7 +312,7 @@ describe('meta addresses', () => {
 describe('meta project', () => {
   it('copies the object dictionary from 0x2000 and prefills the texts', () => {
     const meta = createMetaProject(od(), { fromIndex: 0x2000, languages: ['de', 'en'], fallbackLanguage: 'de', sourceLanguage: 'en', sourceFileName: '/x/device.xdd' });
-    expect(meta.fileName).toBe('device_meta.xdd');
+    expect(meta.fileName).toBe('device.xui');
     expect(meta.objects.map((object) => object.index)).toEqual([0x2100, 0x2101, 0x2110]);
     expect(meta.textInfo.metaProject).toBe(true);
     expect(meta.textInfo.metaSource).toBe('device.xdd');
@@ -366,7 +366,20 @@ describe('meta project', () => {
     expect(issues).toContain('too-long 0x2100:00 label (de): 24 characters, maximum 16');
     expect(issues).toContain('missing-translation 0x2100:00 label: missing en');
     expect(issues).toContain('invalid 0x2100:00: multiplier "abc" is not a number');
-    expect(issues).toContain('dangling-ref 0x2101:00: meta address 0x2999:00 does not exist');
+    expect(issues).toContain('dangling-ref 0x2101:00: UI address 0x2999:00 does not exist');
+  });
+});
+
+describe('user interface files', () => {
+  it('are named .xui, also when an old "_meta.xdd" is saved again', () => {
+    expect(ensureXddName('demo_io.xui', '', true)).toBe('demo_io.xui');
+    expect(ensureXddName('demo_io_meta.xdd', '', true)).toBe('demo_io.xui');
+    expect(ensureXddName('C:\\work\\demo_io.xdd', '', true)).toBe('demo_io.xui');
+    expect(ensureXddName('', 'Boiler', true)).toBe('Boiler.xui');
+    expect(ensureXddName('demo_io.xui', '', false)).toBe('demo_io.xdd');
+    expect(ensureXddName('demo_io_meta.xdd', '', false)).toBe('demo_io_meta.xdd');
+    expect(isUiFileName('Demo.XUI')).toBe(true);
+    expect(isUiFileName('demo.xdd')).toBe(false);
   });
 });
 
@@ -454,7 +467,7 @@ describe('entries not shown on the display', () => {
     // an entry that refers to it gets no texts: reported
     findObject(source, 0x2101)!.metaRef = '0x2100';
     expect(checkMeta(meta, source).map((issue) => `${issue.kind} ${issue.message}`))
-      .toContain('dangling-ref 0x2101:00: meta address 0x2100:00 is not shown on the display, its texts are not exported');
+      .toContain('dangling-ref 0x2101:00: UI address 0x2100:00 is not shown on the display, its texts are not exported');
 
     const temp2 = createEntry({ index: 0x2105, name: 'Boiler temperature 3', dataType: temp.dataType });
     expect(suggestMetaAddresses(meta, temp2, null).map((suggestion) => suggestion.ref)).not.toContain('0x2100');

@@ -31,6 +31,8 @@ Abweichungen vom Plan:
 - **Bezeichnung bis 32 Zeichen** statt 16 als Vorgabe (Rückmeldung aus dem ersten Test mit einem echten Gerät); die Grenze dient nur den Warnungen und ist je Meta-Projekt einstellbar (Anlegen-Dialog und „Settings“).
 - **Nicht auf dem Display** (`CO_textExport = none`): Einträge, die das Display nicht zeigt, werden im Meta-Editor ausgeblendet und nicht nach `meta.c` exportiert; die Texte bleiben in der Datei. Am ARRAY/RECORD gilt das für alle Untereinträge. Subindex 0 startet so.
 - **Liste im Meta-Editor:** Objekte lassen sich einklappen, Objektgrenzen sind farblich abgesetzt.
+- **Benennung in der App:** Das Meta-Projekt heißt in der Oberfläche **User Interface** (Reiter „User Interface“, Feld „UI address“) und wird als **`<name>.xui`** gespeichert (Inhalt XDD 1.1). Ältere `<name>_meta.xdd` werden weiter geöffnet und beim „Save as“ als `.xui` vorgeschlagen. Die Eigenschaften im Dateiformat (`CO_metaRef`, `CO_metaProject` …) und `meta.c` / `meta.h` behalten ihre Namen.
+- **Auswahl folgt der UI-Adresse:** Beim Wechsel aus dem OD zeigt der Reiter „User Interface“ den Eintrag an der UI-Adresse des gewählten Eintrags, auch wenn sie nur eingetippt und noch nicht übernommen ist.
 
 ---
 

@@ -4,6 +4,8 @@ import { DeviceDocument } from '../model/device';
 export interface OdSelection {
   index: number | null;
   subIndex: number | null;
+  /** Meta address typed into the field of the selected entry, not yet applied; undefined: none. */
+  metaRef?: string;
 }
 
 /**
@@ -21,7 +23,7 @@ export class MetaLinkService {
 
   setOdSelection(document: DeviceDocument, selection: OdSelection): void {
     const old = this.selections.get(document);
-    if (old?.index === selection.index && old?.subIndex === selection.subIndex) {
+    if (old?.index === selection.index && old?.subIndex === selection.subIndex && old?.metaRef === selection.metaRef) {
       return;
     }
     this.selections.set(document, selection);

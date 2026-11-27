@@ -171,8 +171,8 @@ interface OdViewState {
             <input class="peach" [ngModel]="draftDenotation" (ngModelChange)="setDraft('denotation', $event)" [disabled]="!editing()" />
           </label>
           <div class="od-name-row meta-row">
-            <label class="od-line" title="Meta entry whose display texts apply, e.g. 0x1400 or 0x1400:01. Empty: own address.">
-              <span>Meta address</span>
+            <label class="od-line" title="Entry of the user interface whose texts apply, e.g. 0x1400 or 0x1400:01. Empty: own address.">
+              <span>UI address</span>
               <input #metaRefInput [ngModel]="draftMetaRef" (ngModelChange)="setDraft('metaRef', $event)" [disabled]="!editing()"
                      [placeholder]="metaPlaceholder()" [class.invalid]="!metaRefValid()" list="od-meta-address-options" />
             </label>
@@ -193,7 +193,8 @@ interface OdViewState {
                 </span>
               </span>
             }
-            <button type="button" class="system standard-size" (click)="openMeta.emit()" [disabled]="!editing()">Texts...</button>
+            <button type="button" class="system standard-size" (click)="openMeta.emit()" [disabled]="!editing()"
+                    title="Edit the texts of this UI address in the tab User Interface">Texts...</button>
           </div>
           <datalist id="od-meta-address-options">
             @for (option of metaOptions(); track option.ref) {
@@ -202,7 +203,7 @@ interface OdViewState {
           </datalist>
           @if (shownSuggestions(); as suggestions) {
             @if (suggestions.length) {
-              <div class="meta-suggestions" role="group" aria-label="Meta entries with a similar name">
+              <div class="meta-suggestions" role="group" aria-label="Entries of the user interface with a similar name">
                 <span class="meta-suggestions-title">Similar:</span>
                 <div class="meta-suggestions-list">
                   @for (suggestion of suggestions; track suggestion.ref) {
@@ -333,7 +334,7 @@ interface OdViewState {
           <button type="button" (click)="cloneDialog()" [disabled]="selectedIndex == null">Clone...</button>
           <button type="button" (click)="deleteSelected()" [disabled]="selectedIndex == null">Delete...</button>
           <button type="button" (click)="toggleSelected()" [disabled]="selectedIndex == null">Toggle</button>
-          <button type="button" (click)="setMetaAddressDialog()" [disabled]="selectedIndex == null">Meta address...</button>
+          <button type="button" (click)="setMetaAddressDialog()" [disabled]="selectedIndex == null">UI address...</button>
         } @else {
           <button type="button" (click)="addSub()" [disabled]="!canAddSub">Add</button>
           <button type="button" (click)="removeSub(true)" [disabled]="!canRemoveSub">Remove (shift up)</button>
@@ -554,7 +555,7 @@ export class ObjectDictionaryComponent {
     }
     const draft = this.draftMetaRef.trim();
     if (!this.metaRefValid()) {
-      return { state: 'missing', address: '', label: '', note: 'not a meta address', title: 'Use e.g. 0x1400 or 0x1400:01, or leave the field empty.' };
+      return { state: 'missing', address: '', label: '', note: 'not a UI address', title: 'Use e.g. 0x1400 or 0x1400:01, or leave the field empty.' };
     }
     const sub = this.selectedSub();
     const draftParent = sub ? parent : { ...parent, metaRef: draft };
@@ -568,8 +569,8 @@ export class ObjectDictionaryComponent {
         state: draft ? 'missing' : 'own',
         address: text,
         label: '',
-        note: 'not in meta project',
-        title: `The meta project has no entry ${text}: no display texts for this entry.`,
+        note: 'not in user interface',
+        title: `The user interface has no entry ${text}: no texts for this entry.`,
       };
     }
     const fallback = fallbackOf(meta);
@@ -581,7 +582,7 @@ export class ObjectDictionaryComponent {
         address: text,
         label,
         note: 'not on display',
-        title: `${text} is not shown on the display (see "On display" in the display texts): its texts are not exported.`,
+        title: `${text} is not shown on the display (see "On display" in the tab User Interface): its texts are not exported.`,
       };
     }
     return {
@@ -589,7 +590,7 @@ export class ObjectDictionaryComponent {
       address: text,
       label,
       note: '',
-      title: linked ? `Uses the display texts of ${text} "${entry.name}".` : `Uses its own display texts (${text}).`,
+      title: linked ? `Uses the texts of ${text} "${entry.name}" in the user interface.` : `Uses its own texts in the user interface (${text}).`,
     };
   }
 
@@ -699,10 +700,10 @@ export class ObjectDictionaryComponent {
     const best = !objects[0]?.metaRef && meta ? suggestMetaAddresses(meta, objects[0], null, 1)[0] : undefined;
     const value = await this.dialogs.prompt(
       best
-        ? { text: `Meta address for ${objects.length} selected object(s), e.g. 0x1400. Their sub entries use the same sub-index there. Empty: own address.`,
+        ? { text: `UI address for ${objects.length} selected object(s), e.g. 0x1400. Their sub entries use the same sub-index there. Empty: own address.`,
             footer: `Suggested: ${best.ref} ${best.name} (${this.similarityText(best)})` }
-        : `Meta address for ${objects.length} selected object(s), e.g. 0x1400. Their sub entries use the same sub-index there. Empty: own address.`,
-      'Meta address',
+        : `UI address for ${objects.length} selected object(s), e.g. 0x1400. Their sub entries use the same sub-index there. Empty: own address.`,
+      'UI address',
       objects[0]?.metaRef || best?.ref || '',
     );
     if (value == null) {
@@ -710,7 +711,7 @@ export class ObjectDictionaryComponent {
     }
     const text = value.trim();
     if (text && !parseMetaAddress(text)) {
-      void this.dialogs.warning(`"${text}" is not a meta address. Use e.g. 0x1400 or 0x1400:01.`);
+      void this.dialogs.warning(`"${text}" is not a UI address. Use e.g. 0x1400 or 0x1400:01.`);
       return;
     }
     objects.forEach((object) => (object.metaRef = text));
@@ -1099,6 +1100,9 @@ export class ObjectDictionaryComponent {
       default: break;
     }
     this.applyDraft();
+    if (field === 'metaRef') {
+      this.publishSelection(); // the display texts editor follows the typed meta address
+    }
   }
 
   async setCount(value: string, select: HTMLSelectElement): Promise<void> {
@@ -1139,7 +1143,7 @@ export class ObjectDictionaryComponent {
       return true;
     }
     if (!this.metaRefValid()) {
-      void this.dialogs.warning(`"${this.draftMetaRef}" is not a meta address. Use e.g. 0x1400 or 0x1400:01, or leave it empty.`);
+      void this.dialogs.warning(`"${this.draftMetaRef}" is not a UI address. Use e.g. 0x1400 or 0x1400:01, or leave it empty.`);
       return false;
     }
     if (entry !== parent && entry.objectType === 'VAR') {
@@ -1165,6 +1169,7 @@ export class ObjectDictionaryComponent {
     this.dirty = false;
     this.baseline = this.snapshot();
     this.reportUnsaved();
+    this.publishSelection();
     this.changed.emit();
     return true;
   }
@@ -1423,13 +1428,18 @@ export class ObjectDictionaryComponent {
     this.draftDisabled = parent.disabled;
     this.draftFlags = parent.flagsPdo;
     this.draftMetaRef = entry.metaRef;
+    this.previewFlash = false;
     this.baseline = this.snapshot();
     this.reportUnsaved();
     this.publishSelection();
   }
 
+  /** Publishes the selection, with the meta address typed into the field if it is not applied yet. */
   private publishSelection(): void {
-    this.metaLink.setOdSelection(this.document(), { index: this.selectedIndex, subIndex: this.selectedSubIndex });
+    const entry = this.selectedSub() ?? this.selected();
+    const typed = this.draftMetaRef.trim();
+    const metaRef = entry && typed !== entry.metaRef.trim() ? typed : undefined;
+    this.metaLink.setOdSelection(this.document(), { index: this.selectedIndex, subIndex: this.selectedSubIndex, metaRef });
   }
 
   /** Draft edits change the object only when they are saved. */

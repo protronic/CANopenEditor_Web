@@ -461,10 +461,10 @@ export interface CreateMetaOptions {
   maxLabelLength?: number;
 }
 
-/** File name of the meta project of an object dictionary: "device.xdd" -> "device_meta.xdd". */
+/** File name of the user interface (meta project) of an object dictionary: "device.xdd" -> "device.xui". */
 export function metaFileName(odFileName: string): string {
-  const base = odFileName.replace(/^.*[\\/]/, '').replace(/\.(xdd|xml|xdc|xpd)$/i, '') || 'device';
-  return `${base}_meta.xdd`;
+  const base = odFileName.replace(/^.*[\\/]/, '').replace(/\.(xdd|xml|xdc|xpd|xui)$/i, '') || 'device';
+  return `${base}.xui`;
 }
 
 /**
@@ -477,7 +477,7 @@ export function createMetaProject(od: DeviceDocument, options: CreateMetaOptions
   meta.fileName = metaFileName(options.sourceFileName || od.fileName);
   meta.fileCreationDate = '';
   meta.fileCreationTime = '';
-  meta.description = `Meta project (display texts) for ${od.productName || options.sourceFileName}`;
+  meta.description = `User interface (display texts) for ${od.productName || options.sourceFileName}`;
   meta.textInfo = {
     ...emptyTextInfo(),
     languages: [...options.languages],
@@ -652,7 +652,7 @@ export function checkMeta(meta: DeviceDocument, od: DeviceDocument | null): Meta
       issues.push({
         kind: inOd ? 'unused' : 'orphaned',
         address,
-        message: inOd ? `${where}: not used, the object dictionary refers to other meta entries`
+        message: inOd ? `${where}: not used, the object dictionary refers to other entries of the user interface`
           : `${where}: not in the object dictionary`,
       });
     }
@@ -664,14 +664,14 @@ export function checkMeta(meta: DeviceDocument, od: DeviceDocument | null): Meta
         continue;
       }
       if (!parseMetaAddress(ref)) {
-        issues.push({ kind: 'invalid', address, message: `${formatMetaAddress(address)}: invalid meta address "${ref}"` });
+        issues.push({ kind: 'invalid', address, message: `${formatMetaAddress(address)}: invalid UI address "${ref}"` });
         continue;
       }
       const target = metaAddressIn(meta, object, sub);
       if (!entryAt(meta, target)) {
-        issues.push({ kind: 'dangling-ref', address, message: `${formatMetaAddress(address)}: meta address ${formatMetaAddress(target)} does not exist` });
+        issues.push({ kind: 'dangling-ref', address, message: `${formatMetaAddress(address)}: UI address ${formatMetaAddress(target)} does not exist` });
       } else if (!object.disabled && isHiddenAt(meta, target)) {
-        issues.push({ kind: 'dangling-ref', address, message: `${formatMetaAddress(address)}: meta address ${formatMetaAddress(target)} is not shown on the display, its texts are not exported` });
+        issues.push({ kind: 'dangling-ref', address, message: `${formatMetaAddress(address)}: UI address ${formatMetaAddress(target)} is not shown on the display, its texts are not exported` });
       }
     }
   }

@@ -495,7 +495,9 @@ function convertAndLoad(inputPath, targetFormat) {
 
 function getFiltersForFormat(format) {
   const filtersMap = {
-    xdd: [{ name: 'XDD Files', extensions: ['xdd', 'xml'] }],
+    xdd: [{ name: 'XDD Files', extensions: ['xdd', 'xui', 'xml'] }],
+    // user interface (meta project with display texts): XDD 1.1 content; old "<name>_meta.xdd" can be opened too
+    xui: [{ name: 'User Interface Files', extensions: ['xui', 'xdd', 'xml'] }],
     eds: [{ name: 'EDS Files', extensions: ['eds'] }],
     dcf: [{ name: 'DCF Files', extensions: ['dcf'] }],
     xdc: [{ name: 'XDC Files', extensions: ['xdc'] }],

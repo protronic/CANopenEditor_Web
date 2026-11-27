@@ -526,11 +526,25 @@ export function bitLength(dataType: DataTypeName): number {
   }
 }
 
-export function ensureXddName(fileName: string, productName: string): string {
+/**
+ * File name for saving: the given name (or the product name) without directory and known extension,
+ * with ".xdd", or ".xui" for a user interface (meta project). An old "<name>_meta.xdd" becomes "<name>.xui".
+ */
+export function ensureXddName(fileName: string, productName: string, userInterface = false): string {
   const source = fileName.trim() || productName.trim() || 'project';
-  const baseName = source.replace(/^.*[\\/]/, '').replace(/\.(xdd|xml|eds|dcf|xdc|xpd)$/i, '') || 'project';
+  let baseName = source.replace(/^.*[\\/]/, '').replace(/\.(xdd|xml|eds|dcf|xdc|xpd|xui)$/i, '') || 'project';
+  if (userInterface && /\.xdd$/i.test(source)) {
+    baseName = baseName.replace(/_meta$/i, '') || baseName;
+  }
   const safe = baseName.replace(/[^\w.\- ()[\]]+/g, '_') || 'project';
-  return `${safe}.xdd`;
+  return `${safe}.${userInterface ? UI_EXTENSION : 'xdd'}`;
+}
+
+/** Extension of user interface files (meta projects with display texts); the content is XDD 1.1. */
+export const UI_EXTENSION = 'xui';
+
+export function isUiFileName(fileName: string): boolean {
+  return /\.xui$/i.test(fileName.trim());
 }
 
 export function formatDate(date: Date): string {

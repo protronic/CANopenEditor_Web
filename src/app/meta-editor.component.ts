@@ -13,7 +13,7 @@ import { FormsModule } from '@angular/forms';
 import { DeviceDocument, OdEntry } from './model/device';
 import { DraggableDirective } from './draggable.directive';
 import { DialogService } from './state/dialog.service';
-import { MetaLinkService } from './state/meta-link.service';
+import { MetaLinkService, OdSelection } from './state/meta-link.service';
 import { OpenDevice, ProjectStore } from './state/project.store';
 import {
   DEFAULT_MAX_LENGTH,
@@ -36,6 +36,7 @@ import {
   maxLength,
   metaAddressIn,
   metaEntries,
+  parseMetaAddress,
   parseValue,
   removeMetaEntry,
   sameAddress,
@@ -83,7 +84,7 @@ interface ValueRow {
       <div class="meta">
         <div class="meta-toolbar">
           <span class="meta-title">
-            Texts of <strong>{{ meta.fileName }}</strong>
+            User interface <strong>{{ meta.fileName }}</strong>
             @if (od(); as od) {
               @if (od !== meta) { for {{ od.fileName }} }
             } @else {
@@ -350,22 +351,22 @@ interface ValueRow {
       </div>
     } @else {
       <section class="empty meta-empty">
-        <h2>Display texts</h2>
+        <h2>User interface</h2>
         <p>Labels for touch displays, tooltips and descriptions for web pages, units, value texts and multipliers,
-           in several languages. They are kept in a <strong>meta project</strong>: a copy of this object dictionary
-           ({{ metaFileHint() }}) that holds the texts. The firmware gets them as <code>meta.c</code> / <code>meta.h</code>.</p>
+           in several languages. They are kept in a <strong>user interface file</strong> ({{ metaFileHint() }}): a copy of
+           this object dictionary that holds the texts. The firmware gets them as <code>meta.c</code> / <code>meta.h</code>.</p>
         <div class="actions">
-          <button type="button" (click)="openCreate()">Create meta project from OD</button>
-          <button type="button" class="quiet" (click)="openMetaFile()">Open meta project...</button>
+          <button type="button" (click)="openCreate()">Create user interface from OD</button>
+          <button type="button" class="quiet" (click)="openMetaFile()">Open user interface...</button>
         </div>
-        <input #metaPicker hidden type="file" accept=".xdd,application/xml" (change)="openMetaFromInput($event)" />
+        <input #metaPicker hidden type="file" accept=".xui,.xdd,application/xml" (change)="openMetaFromInput($event)" />
       </section>
     }
 
     @if (createOpen) {
       <div class="modal-back">
         <form class="modal" appDraggable (submit)="create($event)">
-          <h3>Create meta project</h3>
+          <h3>Create user interface</h3>
           <label class="od-line"><span>Objects</span>
             <select [(ngModel)]="createFrom" name="from">
               <option [ngValue]="fromManufacturer">From 0x2000 (manufacturer and profile)</option>
@@ -390,7 +391,7 @@ interface ValueRow {
     @if (settingsOpen) {
       <div class="modal-back">
         <form class="modal" appDraggable (submit)="saveSettings($event)">
-          <h3>Text settings</h3>
+          <h3>User interface settings</h3>
           <label class="od-line"><span>Languages</span><input [(ngModel)]="settingsLanguages" name="languages" placeholder="de, en" /></label>
           <label class="od-line"><span>Fallback</span><input [(ngModel)]="settingsFallback" name="fallback" /></label>
           @for (kind of lengthKinds; track kind) {
@@ -1199,11 +1200,11 @@ export class MetaEditorComponent {
       }
       return;
     }
-    const object = device.document.objects.find((entry) => entry.index === selection.index);
-    const sub = selection.subIndex != null ? object?.subObjects.find((entry) => entry.subIndex === selection.subIndex) ?? null : null;
-    if (!object) {
+    const found = this.odEntries(device.document, selection);
+    if (!found) {
       return;
     }
+    const { object, sub } = found;
     const address = metaAddressIn(meta.document, object, sub);
     if (entryAt(meta.document, address)) {
       this.selectAddress(address, false);
@@ -1218,6 +1219,23 @@ export class MetaEditorComponent {
     }
   }
 
+  /**
+   * Entry selected in the object dictionary view. A meta address typed into its field but not applied yet
+   * replaces the stored one, so the texts of the chosen meta address are shown.
+   */
+  private odEntries(document: DeviceDocument, selection: OdSelection): { object: OdEntry; sub: OdEntry | null } | null {
+    const object = selection.index != null ? document.objects.find((entry) => entry.index === selection.index) : undefined;
+    if (!object) {
+      return null;
+    }
+    const sub = selection.subIndex != null ? object.subObjects.find((entry) => entry.subIndex === selection.subIndex) ?? null : null;
+    const typed = selection.metaRef;
+    if (typed === undefined || (typed !== '' && !parseMetaAddress(typed))) {
+      return { object, sub };
+    }
+    return sub ? { object, sub: { ...sub, metaRef: typed } } : { object: { ...object, metaRef: typed }, sub: null };
+  }
+
   /** On leaving the tab: let the object dictionary view follow a selection made here. */
   private leave(): void {
     const meta = this.meta();
@@ -1227,12 +1245,9 @@ export class MetaEditorComponent {
     }
     this.userSelected = false;
     const selection = this.link.odSelection(device.document);
-    const current = selection?.index != null ? device.document.objects.find((entry) => entry.index === selection.index) : undefined;
-    if (current) {
-      const sub = selection!.subIndex != null ? current.subObjects.find((entry) => entry.subIndex === selection!.subIndex) ?? null : null;
-      if (sameAddress(metaAddressIn(meta.document, current, sub), this.selected)) {
-        return;
-      }
+    const current = selection ? this.odEntries(device.document, selection) : null;
+    if (current && sameAddress(metaAddressIn(meta.document, current.object, current.sub), this.selected)) {
+      return;
     }
     const user = usedBy(device.document, meta.document, this.selected)[0];
     if (user) {
@@ -1244,7 +1259,7 @@ export class MetaEditorComponent {
 
   metaFileHint(): string {
     const name = this.device().fileName.replace(/\.(xdd|xml)$/i, '');
-    return `${name}_meta.xdd`;
+    return `${name}.xui`;
   }
 
   openCreate(): void {
@@ -1277,13 +1292,13 @@ export class MetaEditorComponent {
   async openMetaFile(): Promise<void> {
     const api = (window as any).electronAPI;
     if (api?.openFileDialog) {
-      const filePath = await api.openFileDialog({ title: 'Open meta project', format: 'xdd' });
+      const filePath = await api.openFileDialog({ title: 'Open user interface', format: 'xui' });
       if (!filePath) {
         return;
       }
       try {
         const xml = await api.readFile(filePath);
-        this.openMetaXml(filePath.split(/[\\/]/).pop() || 'meta.xdd', xml, filePath);
+        this.openMetaXml(filePath.split(/[\\/]/).pop() || 'ui.xui', xml, filePath);
       } catch {
         void this.dialogs.error('The file could not be loaded.');
       }

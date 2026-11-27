@@ -48,7 +48,7 @@ type SaveFilePickerWindow = Window & {
           <span style="width: 16px; display: inline-block;"></span>
           <button type="button" class="quiet" (click)="loadExample()">Example</button>
           <button type="button" (click)="profileOpen.set(true)" [disabled]="!store.selected()">Insert Profile</button>
-          <input #picker hidden type="file" accept=".xdd,application/xml" (change)="openFileFromInput($event)" />
+          <input #picker hidden type="file" accept=".xdd,.xui,application/xml" (change)="openFileFromInput($event)" />
         </div>
       </header>
       }
@@ -62,9 +62,9 @@ type SaveFilePickerWindow = Window & {
                  (click)="store.select(device.id)">
               <div>
                 @if (row.child) {
-                  <strong>↳ Display texts</strong>
+                  <strong>↳ User interface</strong>
                 } @else {
-                  <strong>{{ device.document.productName || 'Unnamed' }}@if (device.document.textInfo.metaProject) { <span class="meta-badge">texts</span> }</strong>
+                  <strong>{{ device.document.productName || 'Unnamed' }}@if (device.document.textInfo.metaProject) { <span class="meta-badge">UI</span> }</strong>
                 }
                 <small>{{ device.fileName }}{{ device.dirty ? ' · modified' : '' }}</small>
               </div>
@@ -85,7 +85,7 @@ type SaveFilePickerWindow = Window & {
                   <button type="button" [class.active]="tab() === 'tx'" (click)="setTab('tx')">TX PDO Mapping</button>
                   <button type="button" [class.active]="tab() === 'rx'" (click)="setTab('rx')">RX PDO Mapping</button>
                 }
-                <button type="button" [class.active]="tab() === 'meta'" (click)="setTab('meta')">Display Texts</button>
+                <button type="button" [class.active]="tab() === 'meta'" (click)="setTab('meta')">User Interface</button>
               </div>
               <span class="schema">Opened as XDD {{ device.document.schemaVersion }}. Save writes XDD 1.1</span>
             </div>
@@ -249,8 +249,8 @@ export class AppComponent implements OnInit, OnDestroy {
     
     if (this.converter.isElectron) {
       const filePath = await (window as any).electronAPI.saveFileDialog({
-        title: 'Save as XDD file',
-        format: 'xdd',
+        title: this.store.isUi(device) ? 'Save as user interface file (.xui)' : 'Save as XDD file',
+        format: this.store.isUi(device) ? 'xui' : 'xdd',
         defaultFilename: this.store.saveName(device)
       });
       if (filePath) {
@@ -271,7 +271,7 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Shows the object dictionary tab of a device (e.g. from "Used by" in the display texts). */
+  /** Shows the object dictionary tab of a device (e.g. from "Used by" in the user interface). */
   showOd(device: OpenDevice): void {
     this.store.select(device.id);
     this.setTab('od');
@@ -288,7 +288,7 @@ export class AppComponent implements OnInit, OnDestroy {
     // In Electron, use custom HTML file browser
     if (this.converter.isElectron) {
       const filePath = await (window as any).electronAPI.openFileDialog({
-        title: 'Open XDD file',
+        title: 'Open XDD or user interface file',
         format: 'xdd'
       });
       if (filePath) {
@@ -309,8 +309,8 @@ export class AppComponent implements OnInit, OnDestroy {
     if (!file) {
       return;
     }
-    if (!file.name.toLowerCase().endsWith('.xdd')) {
-      void this.dialogs.error('Only XDD files are read. Other formats are not imported or exported.');
+    if (!/\.(xdd|xui)$/i.test(file.name)) {
+      void this.dialogs.error('Only XDD files (and user interface files, .xui) are read. Other formats are not imported or exported.');
       return;
     }
     const reader = new FileReader();
@@ -337,21 +337,25 @@ export class AppComponent implements OnInit, OnDestroy {
     await this.openMetaNextTo(filePath);
   }
 
-  /** Opens "<name>_meta.xdd" next to an opened object dictionary, if it exists. */
+  /** Opens the user interface "<name>.xui" (or an old "<name>_meta.xdd") next to an opened object dictionary. */
   private async openMetaNextTo(filePath: string): Promise<void> {
     const od = this.store.selected();
     if (!od || od.document.textInfo.metaProject || this.store.metaOf(od)) {
       return;
     }
-    const metaPath = filePath.replace(/(\.[^./\\]*)?$/, '_meta.xdd');
-    if (metaPath === filePath) {
+    for (const suffix of ['.xui', '_meta.xdd']) {
+      const metaPath = filePath.replace(/(\.[^./\\]*)?$/, suffix);
+      if (metaPath === filePath) {
+        continue;
+      }
+      let xml: string;
+      try {
+        xml = await (window as any).electronAPI.readFile(metaPath);
+      } catch {
+        continue; // no such file next to the object dictionary
+      }
+      this.store.openMetaXml(od.id, metaPath.split(/[\\/]/).pop() || 'ui.xui', xml, metaPath);
       return;
-    }
-    try {
-      const xml = await (window as any).electronAPI.readFile(metaPath);
-      this.store.openMetaXml(od.id, metaPath.split(/[\\/]/).pop() || 'meta.xdd', xml, metaPath);
-    } catch {
-      // no meta project next to the file
     }
   }
 
@@ -370,8 +374,8 @@ export class AppComponent implements OnInit, OnDestroy {
     // Otherwise show save dialog (new or imported file)
     if (this.converter.isElectron) {
       const filePath = await (window as any).electronAPI.saveFileDialog({
-        title: 'Save XDD file',
-        format: 'xdd',
+        title: this.store.isUi(device) ? 'Save user interface file (.xui)' : 'Save XDD file',
+        format: this.store.isUi(device) ? 'xui' : 'xdd',
         defaultFilename: this.store.saveName(device)
       });
       if (filePath) {
@@ -387,7 +391,9 @@ export class AppComponent implements OnInit, OnDestroy {
       try {
         handle = await picker.call(window, {
           suggestedName: this.store.saveName(device),
-          types: [{ description: 'XDD file', accept: { 'application/xml': ['.xdd'] } }],
+          types: [this.store.isUi(device)
+            ? { description: 'User interface file', accept: { 'application/xml': ['.xui'] } }
+            : { description: 'XDD file', accept: { 'application/xml': ['.xdd'] } }],
         });
       } catch (error) {
         if ((error as DOMException).name === 'AbortError') {
@@ -479,7 +485,7 @@ export class AppComponent implements OnInit, OnDestroy {
     const ext = (file.name.split('.').pop() || '').toLowerCase();
     const electronAPI = (window as any).electronAPI;
 
-    if (ext === 'xdd' || ext === 'xml') {
+    if (ext === 'xdd' || ext === 'xml' || ext === 'xui') {
       const content = await file.text();
       let filePath: string | null = null;
       if (this.converter.isElectron && electronAPI?.getPathForFile) {
@@ -529,7 +535,7 @@ export class AppComponent implements OnInit, OnDestroy {
       return;
     }
 
-    void this.dialogs.error(`"${file.name}" is not a supported file (XDD, XPD, EDS, DCF, XDC).`);
+    void this.dialogs.error(`"${file.name}" is not a supported file (XDD, XUI, XPD, EDS, DCF, XDC).`);
   }
 
   async loadExample(): Promise<void> {
@@ -545,9 +551,9 @@ export class AppComponent implements OnInit, OnDestroy {
     }
     const od = this.store.selected();
     try {
-      const response = await fetch('demo_io_meta.xdd');
+      const response = await fetch('demo_io.xui');
       if (od && response.ok) {
-        this.store.openMetaXml(od.id, 'demo_io_meta.xdd', await response.text(), null);
+        this.store.openMetaXml(od.id, 'demo_io.xui', await response.text(), null);
       }
     } catch {
       // the example works without display texts

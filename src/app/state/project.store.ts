@@ -1,5 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { DeviceDocument, ensureXddName, formatDate, formatTime } from '../model/device';
+import { DeviceDocument, ensureXddName, formatDate, formatTime, isUiFileName } from '../model/device';
 import { createEmptyDocument } from '../model/device';
 import { parseXdd, writeXdd } from '../xdd/xdd-codec';
 import { CloneRow, cloneObjects } from '../xdd/clone';
@@ -92,7 +92,8 @@ export class ProjectStore {
   openMetaXml(odId: string, fileName: string, xml: string, filePath: string | null): string | null {
     try {
       const document = parseXdd(xml);
-      document.fileName = ensureXddName(fileName, document.productName);
+      document.textInfo.metaProject = true; // opened as the user interface of the object dictionary
+      document.fileName = ensureXddName(fileName, document.productName, true);
       const meta = this.create(document, document.fileName, false, filePath);
       this.devices.update((list) => [...list, meta]);
       this.linkMeta(odId, meta.id);
@@ -147,7 +148,10 @@ export class ProjectStore {
   private open(fileName: string, xml: string, filePath: string | null, dirty: boolean): void {
     try {
       const document = parseXdd(xml);
-      const safeName = ensureXddName(fileName, document.productName);
+      if (isUiFileName(fileName)) {
+        document.textInfo.metaProject = true; // a .xui file is a user interface
+      }
+      const safeName = ensureXddName(fileName, document.productName, document.textInfo.metaProject);
       document.fileName = safeName;
       this.add(this.create(document, safeName, dirty, filePath));
     } catch (error) {
@@ -195,7 +199,12 @@ export class ProjectStore {
 
   /** File name proposed when saving the device. */
   saveName(device: OpenDevice): string {
-    return ensureXddName(device.fileName, device.document.productName);
+    return ensureXddName(device.fileName, device.document.productName, device.document.textInfo.metaProject);
+  }
+
+  /** True for a user interface (meta project), saved as .xui. */
+  isUi(device: OpenDevice): boolean {
+    return device.document.textInfo.metaProject;
   }
 
   /** XDD of the device; `fileName` (e.g. chosen in the save dialog) replaces its file name. */
@@ -207,7 +216,7 @@ export class ProjectStore {
     }
     device.document.fileModificationDate = formatDate(now);
     device.document.fileModificationTime = formatTime(now);
-    const name = ensureXddName(fileName, device.document.productName);
+    const name = ensureXddName(fileName, device.document.productName, device.document.textInfo.metaProject);
     device.document.fileName = name;
     device.document.schemaVersion = '1.1';
     return { fileName: name, xml: writeXdd(device.document, now) };
