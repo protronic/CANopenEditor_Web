@@ -168,10 +168,16 @@ interface OdViewState {
                 }
               </select>
             </label>
-            <label class="od-line">
-              <span>HighLimit</span>
-              <input [ngModel]="isVar ? draftHigh : ''" (ngModelChange)="setDraft('high', $event)" [disabled]="!isVar" />
-            </label>
+            <div class="od-stack">
+              <label class="od-line">
+                <span>HighLimit</span>
+                <input [ngModel]="isVar ? draftHigh : ''" (ngModelChange)="setDraft('high', $event)" [disabled]="!isVar" />
+              </label>
+              <label class="od-check">
+                <span>Export to C code</span>
+                <input type="checkbox" [ngModel]="isVar ? draftExportMax : false" (ngModelChange)="setDraft('exportMax', $event)" [disabled]="!isVar" />
+              </label>
+            </div>
             <label class="od-line">
               <span>Count Label</span>
               <select #countSelect [ngModel]="draftCount" (ngModelChange)="setCount($event, countSelect)" [disabled]="!isParent">
@@ -189,10 +195,16 @@ interface OdViewState {
                 }
               </select>
             </label>
-            <label class="od-line">
-              <span>LowLimit</span>
-              <input [ngModel]="isVar ? draftLow : ''" (ngModelChange)="setDraft('low', $event)" [disabled]="!isVar" />
-            </label>
+            <div class="od-stack">
+              <label class="od-line">
+                <span>LowLimit</span>
+                <input [ngModel]="isVar ? draftLow : ''" (ngModelChange)="setDraft('low', $event)" [disabled]="!isVar" />
+              </label>
+              <label class="od-check">
+                <span>Export to C code</span>
+                <input type="checkbox" [ngModel]="isVar ? draftExportMin : false" (ngModelChange)="setDraft('exportMin', $event)" [disabled]="!isVar" />
+              </label>
+            </div>
             <label class="od-line">
               <span>Storage Group</span>
               <select #storageSelect [ngModel]="draftStorage" (ngModelChange)="setStorage($event, storageSelect)" [disabled]="!isParent">
@@ -373,6 +385,8 @@ export class ObjectDictionaryComponent {
   draftActual = '';
   draftLow = '';
   draftHigh = '';
+  draftExportMin = false;
+  draftExportMax = false;
   draftStringLen = 0;
   draftCount = '';
   draftStorage = 'RAM';
@@ -790,6 +804,8 @@ export class ObjectDictionaryComponent {
       case 'actual': this.draftActual = String(value); break;
       case 'low': this.draftLow = String(value); break;
       case 'high': this.draftHigh = String(value); break;
+      case 'exportMin': this.draftExportMin = Boolean(value); break;
+      case 'exportMax': this.draftExportMax = Boolean(value); break;
       case 'stringLen': this.draftStringLen = Number(value) || 0; break;
       case 'enabled': this.draftDisabled = !value; break;
       case 'flags': this.draftFlags = Boolean(value); break;
@@ -1087,6 +1103,8 @@ export class ObjectDictionaryComponent {
       this.draftActual = '';
       this.draftLow = '';
       this.draftHigh = '';
+      this.draftExportMin = false;
+      this.draftExportMax = false;
       this.draftStringLen = 0;
       this.draftCount = '';
       this.draftStorage = 'RAM';
@@ -1108,6 +1126,8 @@ export class ObjectDictionaryComponent {
     this.draftActual = entry.actualValue;
     this.draftLow = entry.lowLimit;
     this.draftHigh = entry.highLimit;
+    this.draftExportMin = entry.exportMinValToC;
+    this.draftExportMax = entry.exportMaxValToC;
     this.draftStringLen = entry.stringLengthMin;
     this.draftCount = parent.countLabel;
     this.draftStorage = parent.storageGroup || 'RAM';
@@ -1156,6 +1176,8 @@ export class ObjectDictionaryComponent {
       entry.actualValue = this.draftActual;
       entry.lowLimit = this.draftLow;
       entry.highLimit = this.draftHigh;
+      entry.exportMinValToC = this.draftExportMin;
+      entry.exportMaxValToC = this.draftExportMax;
       entry.stringLengthMin = this.draftStringLen;
     }
     if (entry === parent) {
@@ -1179,6 +1201,8 @@ export class ObjectDictionaryComponent {
       actual: this.draftActual,
       low: this.draftLow,
       high: this.draftHigh,
+      exportMin: this.draftExportMin,
+      exportMax: this.draftExportMax,
       stringLen: this.draftStringLen,
       count: this.draftCount,
       storage: this.draftStorage,

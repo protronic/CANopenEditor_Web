@@ -90,6 +90,8 @@ export interface OdEntry {
   actualValue: string;
   lowLimit: string;
   highLimit: string;
+  exportMinValToC: boolean;
+  exportMaxValToC: boolean;
   description: string;
   denotation: string;
   disabled: boolean;
@@ -302,6 +304,8 @@ export function createEntry(partial: Partial<OdEntry> & Pick<OdEntry, 'index' | 
     actualValue: partial.actualValue ?? '',
     lowLimit: partial.lowLimit ?? '',
     highLimit: partial.highLimit ?? '',
+    exportMinValToC: partial.exportMinValToC ?? false,
+    exportMaxValToC: partial.exportMaxValToC ?? false,
     description: partial.description ?? '',
     denotation: partial.denotation ?? '',
     disabled: partial.disabled ?? false,

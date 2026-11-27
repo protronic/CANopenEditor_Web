@@ -436,6 +436,14 @@ button.collapse {
 
 .object-settings .span-2 { grid-column: 1 / span 2; }
 
+/* Limit field with its "Export to C code" checkbox below it, in one grid cell. */
+.od-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
 .od-check {
   display: flex;
   flex-direction: row;

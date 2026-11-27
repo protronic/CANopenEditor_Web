@@ -206,4 +206,41 @@ describe('writeXdd', () => {
     expect(slots[0]?.mappings[0]?.label).toContain('Speed <rpm>');
     expect(hex4(slots[0]?.commIndex ?? 0)).toBe('1400');
   });
+
+  it('writes the C-export flags as parameter properties and reads them back', () => {
+    const document = createEmptyDocument();
+    document.productName = 'Sensor';
+    document.objects.push(createEntry({
+      index: 0x2000,
+      name: 'Speed',
+      objectType: 'VAR',
+      dataType: 'UNSIGNED32',
+      lowLimit: '0',
+      highLimit: '100',
+      exportMinValToC: true,
+      exportMaxValToC: true,
+    }));
+
+    const xml = writeXdd(document, new Date('2026-11-03T10:00:00Z'));
+    expect(xml).toContain('<q1:property name="ExportMinValToC" value="true" />');
+    expect(xml).toContain('<q1:property name="ExportMaxValToC" value="true" />');
+
+    const parsed = parseXdd(xml);
+    expect(findObject(parsed, 0x2000)).toMatchObject({
+      lowLimit: '0',
+      highLimit: '100',
+      exportMinValToC: true,
+      exportMaxValToC: true,
+    });
+
+    const entry = findObject(parsed, 0x2000);
+    if (!entry) {
+      throw new Error('missing object');
+    }
+    entry.exportMinValToC = false;
+    entry.exportMaxValToC = false;
+    const without = writeXdd(parsed, new Date('2026-11-03T10:00:00Z'));
+    expect(without).not.toContain('ExportMinValToC');
+    expect(without).not.toContain('ExportMaxValToC');
+  });
 });

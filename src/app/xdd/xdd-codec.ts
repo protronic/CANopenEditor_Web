@@ -567,6 +567,12 @@ function applyParameter(
       case 'CO_stringLengthMin':
         entry.stringLengthMin = Number(value) || 0;
         break;
+      case 'ExportMinValToC':
+        entry.exportMinValToC = value === 'true';
+        break;
+      case 'ExportMaxValToC':
+        entry.exportMaxValToC = value === 'true';
+        break;
       default:
         break;
     }
@@ -673,6 +679,12 @@ function propertyLines(entry: OdEntry, level: number): string[] {
   }
   if (entry.stringLengthMin) {
     properties.push(['CO_stringLengthMin', String(entry.stringLengthMin)]);
+  }
+  if (entry.exportMinValToC) {
+    properties.push(['ExportMinValToC', 'true']);
+  }
+  if (entry.exportMaxValToC) {
+    properties.push(['ExportMaxValToC', 'true']);
   }
   const pad = '  '.repeat(level);
   return properties.map(([name, value]) => `${pad}<q1:property name="${esc(name)}" value="${esc(value)}" />`);
