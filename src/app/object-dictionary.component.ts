@@ -160,6 +160,23 @@ interface OdViewState {
 
           <fieldset class="object-settings">
             <legend>Object settings</legend>
+            <label class="od-check">
+              <span>Enabled</span>
+              <input type="checkbox" [ngModel]="!draftDisabled" (ngModelChange)="setDraft('enabled', $event)" [disabled]="!isParent" />
+            </label>
+            <label class="od-line">
+              <span>Default Value</span>
+              <input [ngModel]="isVar ? draftDefault : ''" (ngModelChange)="setDraft('default', $event)" [disabled]="!isVar" />
+            </label>
+            <label class="od-line">
+              <span>Count Label</span>
+              <select #countSelect [ngModel]="draftCount" (ngModelChange)="setCount($event, countSelect)" [disabled]="!isParent">
+                @for (label of countLabels(); track label) {
+                  <option [value]="label">{{ label }}</option>
+                }
+              </select>
+            </label>
+
             <label class="od-line">
               <span>Object Type</span>
               <select [ngModel]="draftType" disabled>
@@ -168,21 +185,15 @@ interface OdViewState {
                 }
               </select>
             </label>
-            <div class="od-stack">
-              <label class="od-line">
-                <span>HighLimit</span>
-                <input [ngModel]="isVar ? draftHigh : ''" (ngModelChange)="setDraft('high', $event)" [disabled]="!isVar" />
-              </label>
-              <label class="od-check">
-                <span>Export to C code</span>
-                <input type="checkbox" [ngModel]="isVar ? draftExportMax : false" (ngModelChange)="setDraft('exportMax', $event)" [disabled]="!isVar" />
-              </label>
-            </div>
             <label class="od-line">
-              <span>Count Label</span>
-              <select #countSelect [ngModel]="draftCount" (ngModelChange)="setCount($event, countSelect)" [disabled]="!isParent">
-                @for (label of countLabels(); track label) {
-                  <option [value]="label">{{ label }}</option>
+              <span>String Len Min</span>
+              <input type="number" min="0" [ngModel]="isVar ? draftStringLen : ''" (ngModelChange)="setDraft('stringLen', $event)" [disabled]="!isVar" />
+            </label>
+            <label class="od-line">
+              <span>Storage Group</span>
+              <select #storageSelect [ngModel]="draftStorage" (ngModelChange)="setStorage($event, storageSelect)" [disabled]="!isParent">
+                @for (group of storageLabels(); track group) {
+                  <option [value]="group">{{ group }}</option>
                 }
               </select>
             </label>
@@ -195,24 +206,11 @@ interface OdViewState {
                 }
               </select>
             </label>
-            <div class="od-stack">
-              <label class="od-line">
-                <span>LowLimit</span>
-                <input [ngModel]="isVar ? draftLow : ''" (ngModelChange)="setDraft('low', $event)" [disabled]="!isVar" />
-              </label>
-              <label class="od-check">
-                <span>Export to C code</span>
-                <input type="checkbox" [ngModel]="isVar ? draftExportMin : false" (ngModelChange)="setDraft('exportMin', $event)" [disabled]="!isVar" />
-              </label>
-            </div>
             <label class="od-line">
-              <span>Storage Group</span>
-              <select #storageSelect [ngModel]="draftStorage" (ngModelChange)="setStorage($event, storageSelect)" [disabled]="!isParent">
-                @for (group of storageLabels(); track group) {
-                  <option [value]="group">{{ group }}</option>
-                }
-              </select>
+              <span>High Limit</span>
+              <input [ngModel]="isVar ? draftHigh : ''" (ngModelChange)="setDraft('high', $event)" [disabled]="!isVar" />
             </label>
+            <span></span>
 
             <label class="od-line">
               <span>Access SDO</span>
@@ -223,14 +221,17 @@ interface OdViewState {
                 <option value="rw">rw</option>
               </select>
             </label>
-            <label class="od-line">
-              <span>Actual Value</span>
-              <input class="peach" [ngModel]="isVar ? draftActual : ''" (ngModelChange)="setDraft('actual', $event)" [disabled]="!isVar" />
+            <label class="od-check export-c">
+              <input type="checkbox" [ngModel]="isVar ? draftExportMax : false" (ngModelChange)="setDraft('exportMax', $event)" [disabled]="!isVar" />
+              <span>Generate #define on C export</span>
             </label>
-            <label class="od-check">
-              <span>Enabled</span>
-              <input type="checkbox" [ngModel]="!draftDisabled" (ngModelChange)="setDraft('enabled', $event)" [disabled]="!isParent" />
-            </label>
+            <div class="save-row">
+              <label class="od-check autosave">
+                <input type="checkbox" [(ngModel)]="autosave" />
+                <span>Auto Apply</span>
+              </label>
+              <button type="button" class="system standard-size" [class.dirty]="dirty" (click)="saveChanges()" [disabled]="!editing()">Apply</button>
+            </div>
 
             <label class="od-line">
               <span>Access PDO</span>
@@ -242,11 +243,9 @@ interface OdViewState {
               </select>
             </label>
             <label class="od-line">
-              <span>String Len Min</span>
-              <input type="number" min="0" [ngModel]="isVar ? draftStringLen : ''" (ngModelChange)="setDraft('stringLen', $event)" [disabled]="!isVar" />
+              <span>Low Limit</span>
+              <input [ngModel]="isVar ? draftLow : ''" (ngModelChange)="setDraft('low', $event)" [disabled]="!isVar" />
             </label>
-            <span></span>
-
             <label class="od-line">
               <span>Access SRDO</span>
               <select [ngModel]="isVar ? draftSrdo : ''" (ngModelChange)="setDraft('srdo', $event)" [disabled]="!isVar">
@@ -256,20 +255,11 @@ interface OdViewState {
                 <option value="trx">trx</option>
               </select>
             </label>
-            <span></span>
-            <span></span>
-
-            <label class="od-line span-2 default-line">
-              <span>Default value</span>
-              <input [ngModel]="isVar ? draftDefault : ''" (ngModelChange)="setDraft('default', $event)" [disabled]="!isVar" />
+            <label class="od-check export-c">
+              <input type="checkbox" [ngModel]="isVar ? draftExportMin : false" (ngModelChange)="setDraft('exportMin', $event)" [disabled]="!isVar" />
+              <span>Generate #define on C export</span>
             </label>
-            <div class="save-row">
-              <label class="od-check autosave">
-                <input type="checkbox" [(ngModel)]="autosave" />
-                <span>Auto Apply</span>
-              </label>
-              <button type="button" class="system standard-size" [class.dirty]="dirty" (click)="saveChanges()" [disabled]="!editing()">Apply</button>
-            </div>
+            <span></span>
           </fieldset>
         </div>
       </div>
@@ -382,7 +372,6 @@ export class ObjectDictionaryComponent {
   draftPdo: PdoMapping = 'no';
   draftSrdo: SrdoAccess = 'no';
   draftDefault = '';
-  draftActual = '';
   draftLow = '';
   draftHigh = '';
   draftExportMin = false;
@@ -801,7 +790,6 @@ export class ObjectDictionaryComponent {
       case 'pdo': this.draftPdo = value as PdoMapping; break;
       case 'srdo': this.draftSrdo = value as SrdoAccess; break;
       case 'default': this.setDefault(String(value)); break;
-      case 'actual': this.draftActual = String(value); break;
       case 'low': this.draftLow = String(value); break;
       case 'high': this.draftHigh = String(value); break;
       case 'exportMin': this.draftExportMin = Boolean(value); break;
@@ -1100,7 +1088,6 @@ export class ObjectDictionaryComponent {
       this.draftPdo = 'no';
       this.draftSrdo = 'no';
       this.draftDefault = '';
-      this.draftActual = '';
       this.draftLow = '';
       this.draftHigh = '';
       this.draftExportMin = false;
@@ -1123,7 +1110,6 @@ export class ObjectDictionaryComponent {
     this.draftPdo = entry.pdoMapping;
     this.draftSrdo = entry.accessSrdo;
     this.draftDefault = entry.defaultValue;
-    this.draftActual = entry.actualValue;
     this.draftLow = entry.lowLimit;
     this.draftHigh = entry.highLimit;
     this.draftExportMin = entry.exportMinValToC;
@@ -1173,7 +1159,6 @@ export class ObjectDictionaryComponent {
       entry.pdoMapping = this.draftPdo;
       entry.accessSrdo = this.draftSrdo;
       entry.defaultValue = this.draftDefault;
-      entry.actualValue = this.draftActual;
       entry.lowLimit = this.draftLow;
       entry.highLimit = this.draftHigh;
       entry.exportMinValToC = this.draftExportMin;
@@ -1198,7 +1183,6 @@ export class ObjectDictionaryComponent {
       pdo: this.draftPdo,
       srdo: this.draftSrdo,
       defaultValue: this.draftDefault,
-      actual: this.draftActual,
       low: this.draftLow,
       high: this.draftHigh,
       exportMin: this.draftExportMin,

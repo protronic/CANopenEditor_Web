@@ -429,20 +429,15 @@ button.collapse {
   flex: none;
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.05fr) minmax(0, 1.15fr);
-  gap: 0.35rem 0.8rem;
+  /* Equal row heights with a uniform row gap, so all input rows are spaced the same. */
+  grid-auto-rows: 1fr;
+  row-gap: 0.35rem;
+  column-gap: 0.8rem;
   align-items: center;
   margin: 0;
 }
 
 .object-settings .span-2 { grid-column: 1 / span 2; }
-
-/* Limit field with its "Export to C code" checkbox below it, in one grid cell. */
-.od-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  min-width: 0;
-}
 
 .od-check {
   display: flex;
@@ -459,10 +454,17 @@ button.collapse {
 
 .od-check.autosave > span { flex: none; }
 
-/* "Auto Apply" left-aligned above "Apply"; the button is a bit wider than the checkbox with its
-   text and lines up with "Default value". */
+/* "Generate #define on C export" as its own row below the HighLimit/LowLimit input, indented so it is
+   flush-left with the input fields (label width 6.4rem + gap 0.45rem of .od-line). */
+.od-check.export-c { margin-left: calc(6.4rem + 0.45rem); }
+.od-check.export-c > span { flex: none; }
+
+/* "Auto Apply" left-aligned above "Apply", bottom-right below the right column. It spans two rows,
+   so it never makes a row taller than the input rows (keeps the row gaps equal). */
 .save-row {
   display: grid;
+  grid-column: 3;
+  grid-row: 4 / span 2;
   justify-self: end;
   align-self: end;
   gap: 0.35rem;

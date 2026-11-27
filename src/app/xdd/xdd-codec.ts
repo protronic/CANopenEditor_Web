@@ -408,7 +408,6 @@ function readNetworkObject(
     access: 'read',
     pdoMapping: pdoFrom(element.getAttribute('PDOmapping')),
     defaultValue: element.getAttribute('defaultValue') ?? '',
-    actualValue: element.getAttribute('actualValue') ?? '',
     lowLimit: element.getAttribute('lowLimit') ?? '',
     highLimit: element.getAttribute('highLimit') ?? '',
     denotation: element.getAttribute('denotation') ?? '',
@@ -437,7 +436,6 @@ function readNetworkObject(
       access: 'read',
       pdoMapping: pdoFrom(subElement.getAttribute('PDOmapping')),
       defaultValue: subElement.getAttribute('defaultValue') ?? '',
-      actualValue: subElement.getAttribute('actualValue') ?? '',
       lowLimit: subElement.getAttribute('lowLimit') ?? '',
       highLimit: subElement.getAttribute('highLimit') ?? '',
       denotation: subElement.getAttribute('denotation') ?? '',
@@ -536,10 +534,6 @@ function applyParameter(
   }
   if (limits.high != null) {
     entry.highLimit = limits.high;
-  }
-  const actual = child(parameter, 'actualValue');
-  if (actual) {
-    entry.actualValue = actual.getAttribute('value') ?? (actual.textContent ?? '').trim();
   }
   const denotation = child(parameter, 'denotation');
   if (denotation) {
@@ -644,9 +638,6 @@ function parameterLines(entry: OdEntry, parent: OdEntry | null, level: number): 
       `${pad}    </q1:range>`,
       `${pad}  </q1:allowedValues>`,
     );
-  }
-  if (entry.actualValue) {
-    lines.push(`${pad}  <q1:actualValue value="${esc(entry.actualValue)}" />`);
   }
   if (entry.denotation) {
     lines.push(

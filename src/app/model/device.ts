@@ -87,7 +87,6 @@ export interface OdEntry {
   access: AccessType;
   pdoMapping: PdoMapping;
   defaultValue: string;
-  actualValue: string;
   lowLimit: string;
   highLimit: string;
   exportMinValToC: boolean;
@@ -301,7 +300,6 @@ export function createEntry(partial: Partial<OdEntry> & Pick<OdEntry, 'index' | 
     access: partial.access ?? 'readWrite',
     pdoMapping: partial.pdoMapping ?? 'no',
     defaultValue: partial.defaultValue ?? '',
-    actualValue: partial.actualValue ?? '',
     lowLimit: partial.lowLimit ?? '',
     highLimit: partial.highLimit ?? '',
     exportMinValToC: partial.exportMinValToC ?? false,
